@@ -1,0 +1,1 @@
+// ModuleComposer.js placeholder

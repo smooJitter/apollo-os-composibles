@@ -1,0 +1,1 @@
+// promptSchema.js placeholder
