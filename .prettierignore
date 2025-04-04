@@ -1,0 +1,19 @@
+# Build artifacts
+dist/
+build/
+coverage/
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Config files that should keep their formatting
+package-lock.json
+yarn.lock
+.env*
+
+# Generated files
+**/*.generated.* 
