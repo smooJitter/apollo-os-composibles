@@ -1,0 +1,14 @@
+{
+  "name": "@apolloos/plugin-utils",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.8.0", 
+    "@apolloos/error-utils": "0.1.0"
+  }
+} 

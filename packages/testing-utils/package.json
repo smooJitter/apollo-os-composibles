@@ -1,0 +1,14 @@
+{
+  "name": "@apolloos/testing-utils",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dependencies": {
+    "@apolloos/error-utils": "0.1.0",
+    "graphql-compose": "^9.0.0"
+  }
+} 
