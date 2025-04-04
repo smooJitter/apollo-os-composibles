@@ -1,7 +1,7 @@
 // modules/user/resolvers/userResolvers.js
 import { schemaComposer } from 'graphql-compose';
 // Import resolver wrappers if needed for securing resolvers here
-// import { requireUser, requireRole } from '@packages/resolver-utils'; 
+// import { requireUser, requireRole } from '@apolloos/resolver-utils'; 
 
 // Initialize objects to export, even if UserTC isn't found yet
 export const userQueries = {};
@@ -50,6 +50,55 @@ if (UserTC) {
 
 } else {
     console.error('[userResolvers] Cannot define user queries/mutations because UserTC was not found.');
+    
+    console.warn('[userResolvers] User TypeComposer not found. Adding mock resolvers for development.');
+    
+    // --- Add Mock Resolvers for Development ---
+    // Mock 'me' query
+    userQueries.me = {
+        type: 'JSON',
+        resolve: () => ({
+            _id: 'mock-user-id',
+            name: 'Mock User',
+            email: 'user@example.com',
+            role: 'user',
+            active: true
+        })
+    };
+    
+    // Mock userById query
+    userQueries.userById = {
+        type: 'JSON',
+        args: { _id: 'String!' },
+        resolve: (_, { _id }) => ({
+            _id,
+            name: 'Mock User',
+            email: 'user@example.com',
+            role: 'user',
+            active: true
+        })
+    };
+    
+    // Mock users query
+    userQueries.users = {
+        type: ['JSON'],
+        resolve: () => ([
+            {
+                _id: 'mock-user-1',
+                name: 'Mock User 1',
+                email: 'user1@example.com',
+                role: 'user',
+                active: true
+            },
+            {
+                _id: 'mock-user-2',
+                name: 'Mock Admin',
+                email: 'admin@example.com',
+                role: 'admin',
+                active: true
+            }
+        ])
+    };
 }
 
 // Note: We are exporting the resolver maps. The module definition (index.js)

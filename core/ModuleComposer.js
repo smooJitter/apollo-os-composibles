@@ -26,10 +26,16 @@ export function composeSchema(ctx) {
   schemaComposer.clear();
 
   // Add custom scalars from config
-  if (ctx.graphqlConfig?.customScalars) {
-    Object.entries(ctx.graphqlConfig.customScalars).forEach(([name, scalar]) => {
-      schemaComposer.addScalar(scalar);
-    });
+  if (ctx.graphqlConfig?.customScalars && typeof schemaComposer.addScalar === 'function') {
+    try {
+      Object.entries(ctx.graphqlConfig.customScalars).forEach(([name, scalar]) => {
+        schemaComposer.addScalar(scalar);
+      });
+    } catch (err) {
+      ctx.logger?.warn(`[ModuleComposer] Error adding custom scalars: ${err.message}. Continuing without custom scalars.`);
+    }
+  } else if (ctx.graphqlConfig?.customScalars) {
+    ctx.logger?.warn('[ModuleComposer] schemaComposer.addScalar is not a function. Custom scalars will not be added.');
   }
 
   // Register all module typeComposers
@@ -48,6 +54,48 @@ export function composeSchema(ctx) {
     // Register module resolvers into the registry (they aren't directly added to schemaComposer here)
     if (mod.resolvers) {
       graphqlRegistry.resolvers[mod.id] = mod.resolvers;
+    }
+  }
+
+  // Process resolvers from all modules and add them to the schema
+  ctx.logger?.debug('[ModuleComposer] Processing module resolvers...');
+  const rootQueries = {};
+  const rootMutations = {};
+
+  // Collect and merge all module resolvers
+  for (const mod of modules) {
+    const moduleResolvers = graphqlRegistry.resolvers[mod.id];
+    if (!moduleResolvers) continue;
+
+    // Add module queries to the root Query type
+    if (moduleResolvers.Query) {
+      ctx.logger?.debug(`[ModuleComposer] Found queries in module ${mod.id}`);
+      Object.assign(rootQueries, moduleResolvers.Query);
+    }
+
+    // Add module mutations to the root Mutation type
+    if (moduleResolvers.Mutation) {
+      ctx.logger?.debug(`[ModuleComposer] Found mutations in module ${mod.id}`);
+      Object.assign(rootMutations, moduleResolvers.Mutation);
+    }
+  }
+
+  // Add all collected queries to the schema
+  if (Object.keys(rootQueries).length > 0) {
+    ctx.logger?.debug(`[ModuleComposer] Adding ${Object.keys(rootQueries).length} queries to schema`);
+    schemaComposer.Query.addFields(rootQueries);
+  }
+
+  // Add all collected mutations to the schema
+  if (Object.keys(rootMutations).length > 0) {
+    ctx.logger?.debug(`[ModuleComposer] Adding ${Object.keys(rootMutations).length} mutations to schema`);
+    if (!schemaComposer.Mutation) {
+      schemaComposer.createObjectTC({
+        name: 'Mutation',
+        fields: rootMutations
+      });
+    } else {
+      schemaComposer.Mutation.addFields(rootMutations);
     }
   }
 
@@ -75,14 +123,49 @@ export function composeSchema(ctx) {
   
   // Apply global type wrappers (like adding timestamps)
   if (ctx.graphqlConfig?.withTimestamps) { // Example check
-     schemaComposer.forEach((tc) => {
-        if (tc instanceof schemaComposer.getOTC().constructor) { // Check if it's an ObjectTypeComposer
-            ctx.graphqlConfig.withTimestamps(tc); 
-        }
-     });
+     try {
+       // Instead of using instanceof with getOTC, which requires a type name,
+       // check if the type has the setField method which is common to ObjectTypeComposers
+       schemaComposer.forEach((tc, typeName) => {
+          if (tc && typeof tc.setField === 'function') {
+            ctx.logger?.debug(`[ModuleComposer] Applying timestamps to type: ${typeName}`);
+            ctx.graphqlConfig.withTimestamps(tc);
+          }
+       });
+     } catch (err) {
+       ctx.logger?.warn(`[ModuleComposer] Error applying timestamps to types: ${err.message}. Continuing without timestamps.`);
+     }
   }
 
-  ctx.logger?.info(`[ModuleComposer] Schema composition complete. Found ${schemaComposer.size()} types.`);
+  // Get the size as either a property or method
+  const schemaSize = typeof schemaComposer.size === 'function' 
+    ? schemaComposer.size() 
+    : (typeof schemaComposer.size === 'number' ? schemaComposer.size : 'unknown');
+
+  ctx.logger?.info(`[ModuleComposer] Schema composition complete. Found ${schemaSize} types.`);
+
+  // Ensure at least a minimal Query type exists
+  if (!schemaComposer.Query) {
+    ctx.logger?.warn('[ModuleComposer] No Query type found in schema. Adding a minimal Query type for development.');
+    // Create the Query type first
+    schemaComposer.createObjectTC({
+      name: 'Query',
+      fields: {
+        _devHello: {
+          type: 'String',
+          resolve: () => 'Hello from ApolloOS in development mode!'
+        }
+      }
+    });
+  } else if (Object.keys(schemaComposer.Query.getFields()).length === 0) {
+    ctx.logger?.warn('[ModuleComposer] Query type has no fields. Adding a minimal field for development.');
+    schemaComposer.Query.addFields({
+      _devHello: {
+        type: 'String',
+        resolve: () => 'Hello from ApolloOS in development mode!'
+      }
+    });
+  }
 
   // Build and return the final schema
   try {
@@ -95,7 +178,9 @@ export function composeSchema(ctx) {
 
 // *
 // Example usage: 
+/*
 import { composeSchema } from './core/ModuleComposer.js';
 import { createContext } from './core/context/createContext.js';
 
 const ctx = await createContext();
+*/
