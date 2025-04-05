@@ -10,9 +10,9 @@
     "build": "babel . --out-dir dist --ignore node_modules,dist --copy-files",
     "start": "node dist/main.js",
     "start:mock": "USE_MOCK_DB=true node dist/main.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.mjs",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.mjs --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.mjs --coverage",
     "lint": "eslint . --ext .js,.ts",
     "format": "prettier --write .",
     "forge": "node forge/forge.js",
@@ -43,6 +43,7 @@
     "graphql": "^16.8.0",
     "graphql-compose": "^9.1.0",
     "graphql-compose-mongoose": "^10.0.0",
+    "graphql-scalars": "^1.24.2",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^7.6.0",
     "ramda": "^0.29.1",
@@ -79,9 +80,6 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/dist/"
-    ],
-    "extensionsToTreatAsEsm": [
-      ".js"
     ]
   },
   "prettier": {
