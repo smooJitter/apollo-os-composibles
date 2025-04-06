@@ -4,18 +4,42 @@ import bcrypt from 'bcryptjs';
 import Promise from 'bluebird';
 import * as R from 'ramda';
 
+// Error handler helper
+const handleError = (context) => (error) => {
+  console.error(`[User Register] ${context}:`, error);
+  throw error.message ? error : new Error(`${context}: An unexpected error occurred`);
+};
+
 /**
- * Register a new user using functional programming with Ramda
+ * Register a new user using functional programming approach
+ * 
+ * @param {Object} models - The database models
+ * @returns {Function} - Registration function that accepts input
  */
 export const registerUser = ({ models }) => input => {
   const { User } = models;
   const { username, email, password, firstName, lastName, role } = input;
   
-  // Helper functions
-  const findExistingUser = () => 
-    User.findOne({ $or: [{ username }, { email }] });
+  // Input validation
+  const validateInput = () => {
+    if (!username) throw new Error('Username is required');
+    if (!email) throw new Error('Email is required');
+    if (!password) throw new Error('Password is required');
+    
+    // Simple email validation
+    if (email && !email.includes('@')) {
+      throw new Error('Invalid email format');
+    }
+    
+    return input;
+  };
   
-  const validateUserDoesNotExist = existingUser => {
+  // Check for existing user
+  const checkExistingUser = async () => {
+    const existingUser = await User.findOne({ 
+      $or: [{ username }, { email }] 
+    }).catch(handleError('Database error checking existing user'));
+    
     if (existingUser) {
       if (existingUser.username === username) {
         throw new Error('Username already exists');
@@ -24,57 +48,80 @@ export const registerUser = ({ models }) => input => {
         throw new Error('Email already exists');
       }
     }
-    return null; // Continue if no existing user
+    
+    return input;
   };
   
+  // Hash the password
   const hashPassword = async () => {
-    const salt = await bcrypt.genSalt(10);
-    return bcrypt.hash(password, salt);
+    try {
+      const salt = await bcrypt.genSalt(10);
+      return await bcrypt.hash(password, salt);
+    } catch (error) {
+      handleError('Error hashing password')(error);
+    }
   };
   
-  const createUser = hashedPassword => 
-    new User({
+  // Create user document
+  const createUserDocument = hashedPassword => {
+    return new User({
       username,
       email,
       password: hashedPassword,
-      firstName,
-      lastName,
+      firstName: firstName || '',
+      lastName: lastName || '',
       role: role || 'user',
       isActive: true
     });
-  
-  const saveUser = user => user.save();
-  
-  const sanitizeUser = user => {
-    const userObj = user.toObject();
-    return R.omit(['password'], userObj);
   };
   
-  // Main execution flow with async/await
+  // Save user to database
+  const saveUser = async (user) => {
+    try {
+      return await user.save();
+    } catch (error) {
+      handleError('Error saving user')(error);
+    }
+  };
+  
+  // Remove sensitive information
+  const sanitizeUser = R.pipe(
+    user => user.toObject(),
+    R.omit(['password'])
+  );
+  
+  // Log successful registration
+  const logSuccess = R.tap(user => {
+    console.log(`[User Register] Successfully registered: ${user.username}`);
+  });
+  
+  // Main execution flow
   return Promise.try(async () => {
-    const existingUser = await findExistingUser();
-    validateUserDoesNotExist(existingUser);
-    
+    validateInput();
+    await checkExistingUser();
     const hashedPassword = await hashPassword();
-    const newUser = createUser(hashedPassword);
+    const newUser = createUserDocument(hashedPassword);
     const savedUser = await saveUser(newUser);
     
-    return sanitizeUser(savedUser);
+    return R.pipe(
+      sanitizeUser,
+      logSuccess
+    )(savedUser);
   })
   .timeout(5000, 'Registration request timed out')
   .catch(error => {
-    console.error('[User Register] Error during registration:', error);
-    throw error;
+    console.error('[User Register] Registration failed:', error);
+    throw new Error(error.message || 'Registration failed');
   });
 };
 
-// Use a more functional approach for exporting actions
+// Export actions with a consistent interface
 export const userActions = {
   loginUser,
   registerUser
 };
 
-// Export actions for use within the module or potentially by other modules
+// Use a more functional approach for exporting actions
 // export { registerUser, loginUser };
 
 // Optionally create a default export object for easier access if preferred

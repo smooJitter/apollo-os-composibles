@@ -14,24 +14,72 @@ const store = {
 
 // Pure functions for registry operations
 export const register = R.curry((name, tc) => {
-  store.typeComposers[name] = tc;
   // Also register with schemaComposer to ensure global visibility
   if (!schemaComposer.has(tc.getTypeName())) {
     schemaComposer.add(tc);
   }
-  return tc;
+  
+  return R.tap(
+    () => { store.typeComposers[name] = tc; }, 
+    tc
+  );
 });
 
-export const get = R.prop(R.__, store.typeComposers);
+export const get = R.propOr(null, R.__, store.typeComposers);
 
 export const getAll = () => store.typeComposers;
 
-export const setInitialized = (value = true) => {
-  store.initialized = value;
-  return store;
-};
+export const setInitialized = R.tap(value => { store.initialized = value; });
 
 export const isInitialized = () => store.initialized;
+
+// Ensure root types exist in schema
+const ensureRootTypes = R.tap(() => {
+  ['Query', 'Mutation'].forEach(typeName => {
+    if (!schemaComposer.has(typeName)) {
+      schemaComposer.createObjectTC({
+        name: typeName, 
+        fields: {}
+      });
+    }
+  });
+});
+
+// Create and register type composers
+const createAndRegisterTypes = () => {
+  // Create TypeComposer for User model
+  const UserTC = composeMongoose(userSchemas.User, {
+    removeFields: ['password'], // Don't expose password in GraphQL
+    inputType: {
+      removeFields: ['createdAt', 'updatedAt']
+    }
+  });
+  
+  // Create AuthPayload TypeComposer
+  const AuthPayloadTC = schemaComposer.createObjectTC({
+    name: 'AuthPayload',
+    fields: {
+      user: UserTC,
+      token: 'String!'
+    }
+  });
+  
+  // Register type composers
+  register('UserTC', UserTC);
+  register('AuthPayloadTC', AuthPayloadTC);
+  
+  return { UserTC, AuthPayloadTC };
+};
+
+// Log registration results
+const logRegistration = R.tap(() => {
+  console.log('[TypeComposer Registry] Successfully registered type composers');
+  console.log('[TypeComposer Registry] Schema types:',
+    Array.from(schemaComposer.types.keys())
+      .filter(type => typeof type === 'string')
+      .join(', ')
+  );
+});
 
 // Initialize TypeComposers for User models
 export const initializeTypeComposers = R.once(() => {
@@ -43,50 +91,12 @@ export const initializeTypeComposers = R.once(() => {
   console.log('[TypeComposer Registry] Initializing...');
   
   try {
-    // Create TypeComposer for User model
-    const UserTC = composeMongoose(userSchemas.User, {
-      removeFields: ['password'], // Don't expose password in GraphQL
-      inputType: {
-        removeFields: ['createdAt', 'updatedAt']
-      }
-    });
-    
-    // Create AuthPayload TypeComposer
-    const AuthPayloadTC = schemaComposer.createObjectTC({
-      name: 'AuthPayload',
-      fields: {
-        user: UserTC,
-        token: 'String!'
-      }
-    });
-    
-    // Register the TypeComposers using function composition
-    const registerTypeComposers = R.pipe(
-      () => register('UserTC', UserTC),
-      () => register('AuthPayloadTC', AuthPayloadTC)
-    );
-    
-    registerTypeComposers();
-    
-    // Ensure query and mutation root types are available
-    if (!schemaComposer.has('Query')) {
-      schemaComposer.createObjectTC({
-        name: 'Query', 
-        fields: {}
-      });
-    }
-    
-    if (!schemaComposer.has('Mutation')) {
-      schemaComposer.createObjectTC({
-        name: 'Mutation', 
-        fields: {}
-      });
-    }
-    
-    console.log('[TypeComposer Registry] Successfully registered UserTC and AuthPayloadTC');
-    console.log('[TypeComposer Registry] Schema has types:', schemaComposer.types.keys());
-    
-    setInitialized(true);
+    R.pipe(
+      ensureRootTypes,
+      createAndRegisterTypes,
+      logRegistration,
+      () => setInitialized(true)
+    )();
     
     return getAll();
   } catch (error) {
