@@ -17,6 +17,12 @@ export const validateJournalEntry = (data) => {
     errors.title = 'Title cannot exceed 200 characters';
   }
   
+  // Validate entryType is valid
+  const validEntryTypes = ['Dream', 'Reflection', 'Vision', 'Imagination', 'Memory'];
+  if (data.entryType && !validEntryTypes.includes(data.entryType)) {
+    errors.entryType = 'Invalid entry type';
+  }
+  
   // Validate mood is valid
   const validMoods = ['happy', 'sad', 'anxious', 'excited', 'neutral', 'productive', 'tired', 'other'];
   if (data.mood && !validMoods.includes(data.mood)) {

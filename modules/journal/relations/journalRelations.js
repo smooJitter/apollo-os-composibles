@@ -177,6 +177,35 @@ export const journalRelations = (ctx) => {
               return 0;
             }
           }
+        },
+        entriesByType: {
+          type: 'JSON',
+          description: 'Count of entries in this journal grouped by entry type',
+          resolve: async (journal, args, context) => {
+            try {
+              if (!journal || !journal._id) return {};
+              
+              // Use models from context if available, otherwise from function argument
+              const modelContext = context.models || models;
+              
+              // Perform an aggregation to count entries by type
+              const result = await modelContext.JournalEntry.aggregate([
+                { $match: { journalId: journal._id } },
+                { $group: { _id: '$entryType', count: { $sum: 1 } } }
+              ]);
+              
+              // Convert the aggregation result to a more user-friendly object
+              const entriesByType = {};
+              result.forEach(item => {
+                entriesByType[item._id || 'Reflection'] = item.count;
+              });
+              
+              return entriesByType;
+            } catch (error) {
+              logger?.error(`[Error] Resolving journal entries by type: ${error.message}`);
+              return {};
+            }
+          }
         }
       });
       

@@ -1,8 +1,9 @@
-import { getJournalEntryTC, getJournalEntryInputTC, getAttachmentInputTC } from './registry.js';
+import { getJournalEntryTC, getJournalEntryInputTC, getAttachmentInputTC, getEntryTypeEnumTC } from './registry.js';
 import mongoose from 'mongoose';
 
 export const initResolvers = () => {
   const JournalEntryTC = getJournalEntryTC();
+  const EntryTypeEnumTC = getEntryTypeEnumTC();
   
   // Define queries
   const queries = {
@@ -62,6 +63,59 @@ export const initResolvers = () => {
           return entries;
         } catch (error) {
           logger?.error(`[JournalEntry Resolver] Error fetching journal entries: ${error.message}`);
+          throw error;
+        }
+      }
+    },
+    
+    // Query to get entries by type
+    entriesByType: {
+      type: [JournalEntryTC],
+      args: {
+        userId: 'MongoID!',
+        entryType: EntryTypeEnumTC,
+        limit: 'Int',
+        skip: 'Int',
+        sortBy: 'String',
+        sortOrder: 'String',
+      },
+      resolve: async (source, args, context) => {
+        const { userId, entryType, limit = 20, skip = 0, sortBy = 'entryDate', sortOrder = 'desc' } = args;
+        const { models, logger, currentUser } = context;
+        
+        try {
+          // Convert string ID to ObjectId
+          const userObjectId = mongoose.Types.ObjectId.isValid(userId) 
+            ? new mongoose.Types.ObjectId(userId)
+            : null;
+            
+          if (!userObjectId) {
+            throw new Error(`Invalid user ID: ${userId}`);
+          }
+          
+          // Check authorization if currentUser is available
+          if (currentUser && currentUser.id.toString() !== userId) {
+            throw new Error('Not authorized to view entries for this user');
+          }
+          
+          // Set up sort criteria
+          const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+          
+          // Build query
+          const query = { userId: userObjectId };
+          if (entryType) {
+            query.entryType = entryType;
+          }
+          
+          // Find entries by type
+          const entries = await models.JournalEntry.find(query)
+            .sort(sort)
+            .skip(skip)
+            .limit(limit);
+            
+          return entries;
+        } catch (error) {
+          logger?.error(`[JournalEntry Resolver] Error fetching entries by type: ${error.message}`);
           throw error;
         }
       }

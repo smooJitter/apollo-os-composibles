@@ -30,6 +30,11 @@ const journalEntrySchema = new Schema({
     type: String,
     required: true
   },
+  entryType: {
+    type: String,
+    enum: ['Dream', 'Reflection', 'Vision', 'Imagination', 'Memory'],
+    default: 'Reflection'
+  },
   mood: {
     type: String,
     enum: ['happy', 'sad', 'anxious', 'excited', 'neutral', 'productive', 'tired', 'other'],

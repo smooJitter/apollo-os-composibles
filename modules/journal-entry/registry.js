@@ -22,12 +22,30 @@ export const initTypeComposers = () => {
       fields: {
         title: 'String',
         content: 'String!',
+        entryType: 'String',
         mood: 'String',
         location: 'String',
         entryDate: 'Date',
         isPrivate: 'Boolean',
         tags: '[String]'
       }
+    });
+    
+    // Create entry type enum for more type-safe input
+    const EntryTypeEnumTC = schemaComposer.createEnumTC({
+      name: 'EntryTypeEnum',
+      values: {
+        DREAM: { value: 'Dream' },
+        REFLECTION: { value: 'Reflection' },
+        VISION: { value: 'Vision' },
+        IMAGINATION: { value: 'Imagination' },
+        MEMORY: { value: 'Memory' },
+      }
+    });
+    
+    // Update the entryType field to use the enum
+    JournalEntryInputTC.extendField('entryType', {
+      type: EntryTypeEnumTC
     });
     
     // Create attachment input type
@@ -44,6 +62,7 @@ export const initTypeComposers = () => {
     typeComposers.JournalEntryTC = JournalEntryTC;
     typeComposers.JournalEntryInputTC = JournalEntryInputTC;
     typeComposers.AttachmentInputTC = AttachmentInputTC;
+    typeComposers.EntryTypeEnumTC = EntryTypeEnumTC;
     
     return typeComposers;
   } catch (error) {
@@ -74,9 +93,17 @@ export const getAttachmentInputTC = () => {
   return typeComposers.AttachmentInputTC;
 };
 
+export const getEntryTypeEnumTC = () => {
+  if (!typeComposers.EntryTypeEnumTC) {
+    initTypeComposers();
+  }
+  return typeComposers.EntryTypeEnumTC;
+};
+
 export default {
   initTypeComposers,
   getJournalEntryTC,
   getJournalEntryInputTC,
-  getAttachmentInputTC
+  getAttachmentInputTC,
+  getEntryTypeEnumTC
 }; 
