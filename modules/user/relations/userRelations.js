@@ -52,4 +52,4 @@ export const userRelations = (ctx, modules) => {
 };
 
 // Exporting the function directly as expected by the module lifecycle
-export default userRelations;
+export { userRelations };
