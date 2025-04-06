@@ -87,6 +87,3 @@ export const userHooks = (ctx) => {
     logger?.debug(`[userHooks] Applied 'requireUser' to UserTC.me`);
   }
 };
-
-// Exporting the function directly as expected by the module lifecycle
-export { userHooks };

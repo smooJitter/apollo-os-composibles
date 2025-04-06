@@ -1,76 +1,102 @@
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { createAuthenticationError } from '@apolloos/error-utils';
+import Promise from 'bluebird';
+import * as R from 'ramda';
 
 /**
- * Handles user login.
- * @param {object} input - Input data (email, password).
- * @param {object} ctx - The ApolloOS context.
- * @returns {Promise<{user: object, token: string}>} - The logged-in user and a JWT.
- * @throws {AuthenticationError} If login fails (wrong email/password, inactive user).
+ * Login a user with username/email and password using functional programming
+ * 
+ * @param {Object} models - Database models
+ * @param {Object} input - Login credentials
+ * @param {string} input.username - Username or email
+ * @param {string} input.password - User password
+ * @returns {Promise<{user: Object, token: string}>} - User and JWT token
  */
-export async function loginUser(input, ctx) {
-  const { email, password } = input;
-  const { User } = ctx.app.getModule('user')?.models || {};
-  const { createError, APOLLO_ERROR_CODES } = ctx.errors;
-  const logger = ctx.logger;
+export const loginUser = ({ models }) => input => {
+  const { User } = models;
+  const { username, password } = input;
 
-  if (!User) {
-    throw createError(
-      'User model not found in registry.',
-      APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR
-    );
-  }
-
-  if (!email || !password) {
-    throw createAuthenticationError('Email and password are required.');
-  }
-
-  logger?.debug(`[Action: loginUser] Attempting login for email: ${email}`);
-
-  // Find user by email - explicitly select password as it's excluded by default
-  const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-
-  // Check if user exists and if password is correct
-  if (!user || !(await user.comparePassword(password))) {
-    logger?.warn(
-      `[Action: loginUser] Failed login attempt for email: ${email} (Invalid credentials)`
-    );
-    throw createAuthenticationError('Invalid email or password.');
-  }
-
-  // Check if user account is active
-  if (!user.active) {
-    logger?.warn(`[Action: loginUser] Failed login attempt for email: ${email} (Account inactive)`);
-    throw createAuthenticationError('Your account is inactive. Please contact support.');
-  }
-
-  // Generate JWT
-  const jwtSecret = process.env.JWT_SECRET;
-  const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '1d';
-
-  if (!jwtSecret) {
-    logger?.error('[Action: loginUser] JWT_SECRET environment variable is not set!');
-    throw createError(
-      'Login failed due to server configuration.',
-      APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR
-    );
-  }
-
-  const tokenPayload = {
-    id: user._id,
-    email: user.email,
-    role: user.role,
+  // Helper functions
+  const validateInput = () => {
+    if (!username || !password) {
+      throw new Error('Username and password are required');
+    }
+    return input;
   };
 
-  const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: jwtExpiresIn });
+  const findUser = () => User.findOne({
+    $or: [
+      { username },
+      { email: username.includes('@') ? username : null }
+    ]
+  });
 
-  logger?.info(`[Action: loginUser] User logged in successfully: ${user.email} (ID: ${user._id})`);
-
-  // Return the user (password excluded by default select behavior) and token
-  const userForPayload = await User.findById(user._id);
-
-  return {
-    user: userForPayload,
-    token,
+  const validateUserExists = user => {
+    if (!user) {
+      throw new Error('Invalid credentials');
+    }
+    return user;
   };
-}
+
+  const checkUserIsActive = user => {
+    if (!user.isActive) {
+      throw new Error('Account is disabled');
+    }
+    return user;
+  };
+
+  const verifyPassword = async user => {
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      throw new Error('Invalid credentials');
+    }
+    return user;
+  };
+
+  const generateToken = user => {
+    const tokenPayload = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role
+    };
+    
+    const secret = process.env.JWT_SECRET || 'default-jwt-secret';
+    const expiresIn = '24h';
+    
+    return {
+      user,
+      token: jwt.sign(tokenPayload, secret, { expiresIn })
+    };
+  };
+
+  const sanitizeUserData = authPayload => ({
+    user: R.omit(['password'], authPayload.user.toObject()),
+    token: authPayload.token
+  });
+
+  const logSuccessfulLogin = authPayload => {
+    console.log(`[User Login] User logged in: ${authPayload.user.username}`);
+    return authPayload;
+  };
+
+  // Main execution flow - more sequential to avoid pipeP
+  return Promise.try(async () => {
+    validateInput();
+    
+    const user = await findUser();
+    validateUserExists(user);
+    checkUserIsActive(user);
+    await verifyPassword(user);
+    
+    const authPayload = generateToken(user);
+    const sanitizedData = sanitizeUserData(authPayload);
+    
+    return logSuccessfulLogin(sanitizedData);
+  })
+  .timeout(5000, 'Login request timed out')
+  .catch(error => {
+    console.error('[User Login] Error during login:', error);
+    throw error;
+  });
+};

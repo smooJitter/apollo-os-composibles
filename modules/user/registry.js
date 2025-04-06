@@ -1,79 +1,109 @@
 /**
- * Minimal TypeComposer Registry for the User module
+ * Functional TypeComposer Registry for the User module
  */
+import { schemaComposer } from 'graphql-compose';
+import { composeMongoose } from 'graphql-compose-mongoose';
+import * as R from 'ramda';
+import { userSchemas } from './schemas.js';
 
-// Create a simple registry with only the essentials
-export const TCRegistry = {
-  // Internal registry state
-  _store: new Map(),
-  _initialized: false,
+// Create a private store for type composers
+const store = {
+  typeComposers: {},
+  initialized: false
+};
+
+// Pure functions for registry operations
+export const register = R.curry((name, tc) => {
+  store.typeComposers[name] = tc;
+  // Also register with schemaComposer to ensure global visibility
+  if (!schemaComposer.has(tc.getTypeName())) {
+    schemaComposer.add(tc);
+  }
+  return tc;
+});
+
+export const get = R.prop(R.__, store.typeComposers);
+
+export const getAll = () => store.typeComposers;
+
+export const setInitialized = (value = true) => {
+  store.initialized = value;
+  return store;
+};
+
+export const isInitialized = () => store.initialized;
+
+// Initialize TypeComposers for User models
+export const initializeTypeComposers = R.once(() => {
+  if (isInitialized()) {
+    console.log('[TypeComposer Registry] Already initialized');
+    return getAll();
+  }
   
-  // Register a TypeComposer
-  register(name, tc) {
-    console.log(`[Registry] Registering TypeComposer: ${name}`);
-    this._store.set(name, tc);
-    return this;
-  },
+  console.log('[TypeComposer Registry] Initializing...');
   
-  // Get a TypeComposer
-  get(name) {
-    console.log(`[Registry] Getting TypeComposer: ${name}`);
-    if (!this._store.has(name)) {
-      console.warn(`[Registry] TypeComposer '${name}' not found`);
-      return null;
+  try {
+    // Create TypeComposer for User model
+    const UserTC = composeMongoose(userSchemas.User, {
+      removeFields: ['password'], // Don't expose password in GraphQL
+      inputType: {
+        removeFields: ['createdAt', 'updatedAt']
+      }
+    });
+    
+    // Create AuthPayload TypeComposer
+    const AuthPayloadTC = schemaComposer.createObjectTC({
+      name: 'AuthPayload',
+      fields: {
+        user: UserTC,
+        token: 'String!'
+      }
+    });
+    
+    // Register the TypeComposers using function composition
+    const registerTypeComposers = R.pipe(
+      () => register('UserTC', UserTC),
+      () => register('AuthPayloadTC', AuthPayloadTC)
+    );
+    
+    registerTypeComposers();
+    
+    // Ensure query and mutation root types are available
+    if (!schemaComposer.has('Query')) {
+      schemaComposer.createObjectTC({
+        name: 'Query', 
+        fields: {}
+      });
     }
-    return this._store.get(name);
-  },
-  
-  // Get all TypeComposers
-  getAll() {
-    console.log('[Registry] Getting all TypeComposers');
-    return Array.from(this._store.entries()).reduce((acc, [key, value]) => {
-      acc[key] = value;
-      return acc;
-    }, {});
-  },
-  
-  // Check if initialized
-  isInitialized() {
-    return this._initialized;
-  },
-  
-  // Mark as initialized
-  setInitialized() {
-    console.log('[Registry] Setting registry as initialized');
-    this._initialized = true;
-    return this;
-  },
-  
-  // Reset registry
-  reset() {
-    console.log('[Registry] Resetting registry');
-    this._store = new Map();
-    this._initialized = false;
-    return this;
+    
+    if (!schemaComposer.has('Mutation')) {
+      schemaComposer.createObjectTC({
+        name: 'Mutation', 
+        fields: {}
+      });
+    }
+    
+    console.log('[TypeComposer Registry] Successfully registered UserTC and AuthPayloadTC');
+    console.log('[TypeComposer Registry] Schema has types:', schemaComposer.types.keys());
+    
+    setInitialized(true);
+    
+    return getAll();
+  } catch (error) {
+    console.error('[TypeComposer Registry] Error initializing TypeComposers:', error);
+    throw error;
   }
-};
+});
 
-// Initialize with empty dummy TypeComposers
-export const initializeTypeComposers = () => {
-  console.log('[Registry] Initializing with dummy TypeComposers');
-  
-  if (TCRegistry.isInitialized()) {
-    return TCRegistry;
-  }
-  
-  // Register dummy TCs so nothing breaks
-  TCRegistry
-    .register('UserTC', { name: 'User', dummy: true })
-    .register('AuthTokenTC', { name: 'AuthToken', dummy: true })
-    .setInitialized();
-  
-  return TCRegistry;
-};
+// Convenience exports for common type composers
+export const getUserTC = () => get('UserTC');
+export const getAuthPayloadTC = () => get('AuthPayloadTC');
 
-// Getter for UserTC
-export const getUserTC = () => TCRegistry.get('UserTC');
-
-// Getter for AuthTokenTC
-export const getAuthTokenTC = () => TCRegistry.get('AuthTokenTC'); 
+// Export all registry functions as a unified API
+export const TCRegistry = {
+  register,
+  get,
+  getAll,
+  setInitialized,
+  isInitialized
+}; 

@@ -1,30 +1,25 @@
-import { createUserTC } from './typeComposer/userTC.js';
-import { createAuthResolvers, createUserResolvers, createAdminResolvers } from './resolvers/index.js';
+/**
+ * User Module Resolvers - Simplified
+ */
 
+/**
+ * Create GraphQL resolvers for the User module
+ * 
+ * @param {Object} ctx - Context object
+ * @returns {Object} - GraphQL resolvers
+ */
 export const userResolvers = (ctx) => {
-  // Get the UserTC from the typeComposers
-  const UserTC = ctx.typeComposers?.UserTC;
+  console.log('[User Module] Creating simple GraphQL resolvers');
   
-  if (!UserTC) {
-    ctx.logger?.error('[userResolvers] UserTC not found. Cannot create resolvers.');
-    return { Query: {}, Mutation: {} };
-  }
-  
-  // Create GraphQL resolvers
-  const authMutations = createAuthResolvers(UserTC);
-  const { userQueries, userMutations } = createUserResolvers(UserTC);
-  const { adminQueries, adminMutations } = createAdminResolvers(UserTC);
-  
-  // Return all resolvers combined
+  // Return only the absolute essential resolvers
   return {
     Query: {
-      ...userQueries,
-      ...adminQueries,
-    },
-    Mutation: {
-      ...authMutations,
-      ...userMutations,
-      ...adminMutations,
+      // Health check resolver - always available
+      userHealth: () => ({
+        status: 'ok',
+        message: 'User module is running',
+        timestamp: new Date().toISOString()
+      })
     }
   };
 }; 
