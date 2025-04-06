@@ -1,59 +1,54 @@
 // modules/user/index.js
-import {
-  withModels,
-  withTypeComposers,
-  withResolvers,
-  withHooks,
-  withRelations,
-  withInit
-} from '../../config/module/composers.js';
+import { GraphQLString, GraphQLBoolean } from 'graphql';
 
-import { userSchemas } from './schemas.js';
-import { userResolvers } from './resolvers.js';
-import { userHooks } from './hooks/userHooks.js';
-import { userRelations } from './relations/userRelations.js';
-import * as actions from './actions/index.js';
-import * as validators from './validators/index.js';
-
-import { pipe } from 'ramda';
-
-const userInit = (ctx) => {
-  ctx.logger?.info(`[User Module] Initialization complete.`);
-};
-
+// Ultra-minimal module export
 export default function (ctx) {
-  const moduleId = 'user';
-
-  const composed = pipe(
-    withModels(userSchemas),
-    withTypeComposers(),
-    withResolvers(userResolvers),
-    withHooks(userHooks),
-    withRelations(userRelations),
-    withInit(userInit)
-  )(ctx);
-
+  console.log('[User Module] Creating ultra-minimal module');
+  
+  // Proper GraphQL resolvers with type definitions
+  const resolvers = {
+    Query: {
+      userHealth: {
+        type: 'JSON',
+        description: 'Check if the user module is healthy',
+        resolve: () => ({
+          status: 'ok',
+          message: 'User module is running',
+          timestamp: new Date().toISOString()
+        })
+      }
+    }
+  };
+  
+  // Define type definitions
+  const typeDefs = `
+    scalar JSON
+    
+    extend type Query {
+      userHealth: JSON!
+    }
+  `;
+  
+  // Return minimal module definition
   return {
-    id: moduleId,
+    id: 'user',
     meta: {
-      description: 'Handles user accounts, authentication, and authorization.',
+      description: 'User management module',
       version: '1.0.0',
-      dependsOn: [], // Add dependencies like 'profile' if needed
+      dependsOn: [],
     },
-    // Assets from functional composition
-    typeComposers: composed.typeComposers,
-    resolvers: composed.resolvers,
-    models: composed.models,
     
-    // Additional assets
-    actions: actions,
-    validators: validators,
+    // Core properties
+    resolvers,
+    models: ctx.models || {},
+    typeDefs,
     
-    // Lifecycle functions (delegates to composers)
-    onLoad: () => composed,
-    hooks: userHooks,
-    relations: userRelations,
-    init: userInit
+    // Lifecycle method
+    onLoad: () => ({
+      resolvers,
+      models: ctx.models || {},
+      typeDefs
+    })
   };
 }
 
