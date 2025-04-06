@@ -1,76 +1,26 @@
 import { schemaComposer } from 'graphql-compose';
-import { registerUser, loginUser } from '../actions/index.js'; // Use relative path
 
-// Initialize export object
-export const authMutations = {};
+// Export a function that creates the resolvers
+export const createAuthResolvers = (UserTC) => {
+  const authMutations = {};
 
-// Check if we're in mock mode
-const isMockMode = process.env.USE_MOCK_DB === 'true';
+  // Expose register mutation
+  if (UserTC.hasResolver('register')) {
+    authMutations.register = UserTC.getResolver('register');
+  }
 
-// Use mock resolvers for both mock mode and until we fix the type issues in real mode
-if (isMockMode) {
-    console.log('[authResolvers] Using mock resolvers for auth mutations');
-} else {
-    console.log('[authResolvers] Using JSON type for auth mutations (compatibility mode)');
-}
+  // Expose login mutation
+  if (UserTC.hasResolver('login')) {
+    authMutations.login = UserTC.getResolver('login');
+  }
 
-// Helper function to create a mock user
-const createMockUser = (input) => ({
-    _id: 'mock-user-id-' + Date.now(),
-    name: input.name || 'Mock User',
-    email: input.email,
-    role: 'user',
-    active: true
-});
+  // Expose testMock mutation for testing
+  if (UserTC.hasResolver('testMock')) {
+    authMutations.testMock = UserTC.getResolver('testMock');
+  }
 
-// Register mutations - using JSON scalar type to avoid TypeComposer issues
-authMutations.register = {
-    type: 'JSON',
-    args: {
-        input: 'JSON!'
-    },
-    resolve: async (_, { input }, ctx) => {
-        try {
-            // Always return mock data since we have context issues
-            console.log('[authResolvers] Using mock data for register mutation');
-            return {
-                token: 'mock-jwt-token-for-testing',
-                user: createMockUser(input)
-            };
-        } catch (error) {
-            console.error('[authResolvers] Register error:', error);
-            throw error;
-        }
-    },
-    description: 'Register a new user account'
-};
-
-authMutations.login = {
-    type: 'JSON',
-    args: {
-        input: 'JSON!'
-    },
-    resolve: async (_, { input }, ctx) => {
-        try {
-            // Always return mock data since we have context issues
-            console.log('[authResolvers] Using mock data for login mutation');
-            return {
-                token: 'mock-jwt-token-for-testing',
-                user: {
-                    _id: 'mock-user-login-' + Date.now(),
-                    name: 'Existing Mock User',
-                    email: input.email,
-                    role: 'user',
-                    active: true
-                }
-            };
-        } catch (error) {
-            console.error('[authResolvers] Login error:', error);
-            throw error;
-        }
-    },
-    description: 'Log in a user and receive an authentication token'
+  return authMutations;
 };
 
 // Optional: Add to global schema composer directly if needed, although module system should handle this
-// schemaComposer.Mutation.addFields(authMutations); 
+// schemaComposer.Mutation.addFields(authMutations);

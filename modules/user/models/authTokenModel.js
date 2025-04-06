@@ -30,4 +30,4 @@ export default function createAuthTokenModel(ctx) {
   // Add as needed, e.g., a static method to find and verify a token
 
   return mongoose.models.AuthToken || mongoose.model('AuthToken', AuthTokenSchema);
-} 
+}

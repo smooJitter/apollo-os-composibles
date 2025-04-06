@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
 export const LoginInputSchema = z.object({
-  email: z.string({ required_error: 'Email is required' })
-         .trim()
-         .email({ message: 'Invalid email address format' })
-         .toLowerCase(),
-  password: z.string({ required_error: 'Password is required' })
-            .min(1, { message: 'Password cannot be empty' }), // Basic check for non-empty
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .email({ message: 'Invalid email address format' })
+    .toLowerCase(),
+  password: z
+    .string({ required_error: 'Password is required' })
+    .min(1, { message: 'Password cannot be empty' }), // Basic check for non-empty
 });
 
 /**
@@ -15,5 +17,5 @@ export const LoginInputSchema = z.object({
  * @returns {{success: boolean, data?: object, error?: ZodError}} - Zod parse result.
  */
 export function validateLoginInput(data) {
-    return LoginInputSchema.safeParse(data);
-} 
+  return LoginInputSchema.safeParse(data);
+}

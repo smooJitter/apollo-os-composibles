@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { createAuthenticationError } from '@packages/error-utils';
+import { createAuthenticationError } from '@apolloos/error-utils';
 
 /**
  * Handles user login.
@@ -15,11 +15,14 @@ export async function loginUser(input, ctx) {
   const logger = ctx.logger;
 
   if (!User) {
-    throw createError('User model not found in registry.', APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR);
+    throw createError(
+      'User model not found in registry.',
+      APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR
+    );
   }
 
   if (!email || !password) {
-      throw createAuthenticationError('Email and password are required.');
+    throw createAuthenticationError('Email and password are required.');
   }
 
   logger?.debug(`[Action: loginUser] Attempting login for email: ${email}`);
@@ -29,14 +32,16 @@ export async function loginUser(input, ctx) {
 
   // Check if user exists and if password is correct
   if (!user || !(await user.comparePassword(password))) {
-      logger?.warn(`[Action: loginUser] Failed login attempt for email: ${email} (Invalid credentials)`);
-      throw createAuthenticationError('Invalid email or password.');
+    logger?.warn(
+      `[Action: loginUser] Failed login attempt for email: ${email} (Invalid credentials)`
+    );
+    throw createAuthenticationError('Invalid email or password.');
   }
 
   // Check if user account is active
   if (!user.active) {
-      logger?.warn(`[Action: loginUser] Failed login attempt for email: ${email} (Account inactive)`);
-      throw createAuthenticationError('Your account is inactive. Please contact support.');
+    logger?.warn(`[Action: loginUser] Failed login attempt for email: ${email} (Account inactive)`);
+    throw createAuthenticationError('Your account is inactive. Please contact support.');
   }
 
   // Generate JWT
@@ -44,15 +49,17 @@ export async function loginUser(input, ctx) {
   const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '1d';
 
   if (!jwtSecret) {
-      logger?.error('[Action: loginUser] JWT_SECRET environment variable is not set!');
-      throw createError('Login failed due to server configuration.', APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR);
+    logger?.error('[Action: loginUser] JWT_SECRET environment variable is not set!');
+    throw createError(
+      'Login failed due to server configuration.',
+      APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR
+    );
   }
 
   const tokenPayload = {
     id: user._id,
     email: user.email,
     role: user.role,
-    // Add any other relevant non-sensitive info
   };
 
   const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: jwtExpiresIn });
@@ -60,11 +67,10 @@ export async function loginUser(input, ctx) {
   logger?.info(`[Action: loginUser] User logged in successfully: ${user.email} (ID: ${user._id})`);
 
   // Return the user (password excluded by default select behavior) and token
-  // We fetched with +password, so re-fetch or manually omit if needed for response
-  const userForPayload = await User.findById(user._id); // Re-fetch without password
+  const userForPayload = await User.findById(user._id);
 
   return {
     user: userForPayload,
     token,
   };
-} 
+}

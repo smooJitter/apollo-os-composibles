@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { createUserInputError } from '@packages/error-utils';
+import { createUserInputError } from '@apolloos/error-utils';
 
 /**
  * Handles user registration.
@@ -15,12 +15,17 @@ export async function registerUser(input, ctx) {
   const logger = ctx.logger;
 
   if (!User) {
-    throw createError('User model not found in registry.', APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR);
+    throw createError(
+      'User model not found in registry.',
+      APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR
+    );
   }
 
   // Basic validation (more can be added via validators package)
   if (!email || !password || password.length < 8) {
-      throw createUserInputError('Email and a password (min 8 characters) are required.', { input: { email: !!email, password: password?.length } });
+    throw createUserInputError('Email and a password (min 8 characters) are required.', {
+      input: { email: !!email, password: password?.length },
+    });
   }
 
   logger?.debug(`[Action: registerUser] Attempting registration for email: ${email}`);
@@ -42,46 +47,50 @@ export async function registerUser(input, ctx) {
     });
 
     await newUser.save();
-    logger?.info(`[Action: registerUser] User created successfully: ${newUser.email} (ID: ${newUser._id})`);
+    logger?.info(
+      `[Action: registerUser] User created successfully: ${newUser.email} (ID: ${newUser._id})`
+    );
 
     // Generate JWT
-    // Ensure JWT_SECRET and JWT_EXPIRES_IN are in your environment/.env file
     const jwtSecret = process.env.JWT_SECRET;
     const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '1d';
 
     if (!jwtSecret) {
-        logger?.error('[Action: registerUser] JWT_SECRET environment variable is not set!');
-        // Decide how to handle this - maybe don't issue token, or throw internal error
-        throw createError('Token generation failed due to server configuration.', APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR);
+      logger?.error('[Action: registerUser] JWT_SECRET environment variable is not set!');
+      throw createError(
+        'Token generation failed due to server configuration.',
+        APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR
+      );
     }
 
     const tokenPayload = {
       id: newUser._id,
       email: newUser.email,
       role: newUser.role,
-      // Add any other relevant non-sensitive info
     };
 
     const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: jwtExpiresIn });
 
     // Return the user (password excluded by default) and token
-    // Need to re-fetch or manually exclude password if necessary for the return value
-    const userForPayload = await User.findById(newUser._id); // Re-fetch to ensure password isn't included
+    const userForPayload = await User.findById(newUser._id);
 
     return {
       user: userForPayload,
       token,
     };
-
   } catch (error) {
     // Handle Mongoose validation errors specifically
     if (error.name === 'ValidationError') {
       logger?.warn(`[Action: registerUser] Validation failed for ${email}:`, error.errors);
-      // Extract validation messages
-      const validationErrors = Object.values(error.errors).map(e => ({ field: e.path, message: e.message }));
+      const validationErrors = Object.values(error.errors).map((e) => ({
+        field: e.path,
+        message: e.message,
+      }));
       throw createUserInputError('Registration validation failed.', { validationErrors });
     }
     logger?.error(`[Action: registerUser] Error during registration for ${email}:`, error);
-    throw createError('Registration failed.', APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR, { originalError: error.message });
+    throw createError('Registration failed.', APOLLO_ERROR_CODES.INTERNAL_SERVER_ERROR, {
+      originalError: error.message,
+    });
   }
-} 
+}

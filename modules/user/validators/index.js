@@ -3,12 +3,7 @@ import { RegisterInputSchema, validateRegisterInput } from './registerInput.js';
 import { LoginInputSchema, validateLoginInput } from './loginInput.js';
 
 // Export schemas and validation functions
-export {
-    RegisterInputSchema,
-    validateRegisterInput,
-    LoginInputSchema,
-    validateLoginInput
-};
+export { RegisterInputSchema, validateRegisterInput, LoginInputSchema, validateLoginInput };
 
 // Optionally create a default export object
 // export default {
@@ -16,4 +11,4 @@ export {
 //     validateRegisterInput,
 //     LoginInputSchema,
 //     validateLoginInput
-// }; 
+// };
