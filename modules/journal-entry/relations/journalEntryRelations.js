@@ -87,7 +87,7 @@ export const journalEntryRelations = (ctx) => {
         }
       });
       
-      logger?.debug('[JournalEntry Relations] Added JournalEntry <-> User relation');
+      logger?.debug('[JournalEntry Relations] Added JournalEntry <-> User relations with direct access to user journalEntries');
     }
     
     // Add Journal field to JournalEntry type if Journal type is available
@@ -124,6 +124,95 @@ export const journalEntryRelations = (ctx) => {
           } catch (error) {
             logger?.error(`[Error] Resolving attachment count: ${error.message}`);
             return 0;
+          }
+        }
+      }
+    });
+    
+    // Add journalEntries field to User type
+    UserTC.addFields({
+      journalEntries: {
+        type: [JournalEntryTC],
+        args: {
+          limit: { type: 'Int', defaultValue: 10 },
+          skip: { type: 'Int', defaultValue: 0 },
+          sortBy: { type: 'String', defaultValue: 'entryDate' },
+          sortOrder: { type: 'String', defaultValue: 'desc' },
+          entryType: { type: 'String' }
+        },
+        description: 'All journal entries created by this user across all journals',
+        resolve: async (user, args, context) => {
+          try {
+            if (!user || !user._id) return [];
+            
+            // Use models from context if available, otherwise from function argument
+            const modelContext = context.models || models;
+            const { limit, skip, sortBy, sortOrder, entryType } = args;
+            
+            // Define sort criteria
+            const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
+            
+            // Build query
+            const query = { userId: user._id };
+            if (entryType) {
+              query.entryType = entryType;
+            }
+            
+            // Find all entries by this user
+            return await modelContext.JournalEntry.find(query)
+              .sort(sort)
+              .skip(skip)
+              .limit(limit);
+          } catch (error) {
+            logger?.error(`[Error] Resolving user journalEntries relation: ${error.message}`);
+            return [];
+          }
+        }
+      },
+      journalEntryCount: {
+        type: 'Int',
+        description: 'Total number of journal entries created by this user',
+        resolve: async (user, args, context) => {
+          try {
+            if (!user || !user._id) return 0;
+            
+            // Use models from context if available, otherwise from function argument
+            const modelContext = context.models || models;
+            
+            // Count all entries
+            return await modelContext.JournalEntry.countDocuments({ userId: user._id });
+          } catch (error) {
+            logger?.error(`[Error] Resolving user journalEntryCount: ${error.message}`);
+            return 0;
+          }
+        }
+      },
+      journalEntriesByType: {
+        type: 'JSON',
+        description: 'Count of entries created by this user grouped by entry type',
+        resolve: async (user, args, context) => {
+          try {
+            if (!user || !user._id) return {};
+            
+            // Use models from context if available, otherwise from function argument
+            const modelContext = context.models || models;
+            
+            // Perform an aggregation to count entries by type
+            const result = await modelContext.JournalEntry.aggregate([
+              { $match: { userId: user._id } },
+              { $group: { _id: '$entryType', count: { $sum: 1 } } }
+            ]);
+            
+            // Convert the aggregation result to a more user-friendly object
+            const entriesByType = {};
+            result.forEach(item => {
+              entriesByType[item._id || 'Reflection'] = item.count;
+            });
+            
+            return entriesByType;
+          } catch (error) {
+            logger?.error(`[Error] Resolving user journalEntriesByType: ${error.message}`);
+            return {};
           }
         }
       }

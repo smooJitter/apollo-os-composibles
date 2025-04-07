@@ -1,7 +1,7 @@
 // modules/journal/schemas.js
 import mongoose from 'mongoose';
-import { timestamps } from '../../config/shared-mongoose/plugins/timestamps.js';
-import { taggableSchema } from '../../config/shared-mongoose/plugins/taggable.js';
+import { timestampsPlugin } from '../../config/shared-mongoose/plugins/timestamps.js';
+// taggableSchema is available via ctx when the module is initialized
 
 const { Schema } = mongoose;
 
@@ -49,12 +49,21 @@ const journalSchema = new Schema({
 });
 
 // Apply plugins
-journalSchema.plugin(timestamps);
-journalSchema.plugin(taggableSchema, { path: 'tags' });
+journalSchema.plugin(timestampsPlugin);
+// Apply taggable plugin when schema is initialized with context
 
 // Create Model
 export const Journal = mongoose.model('Journal', journalSchema);
 
+// Export a function that will apply plugins that require context
+export const applyContextPlugins = (ctx) => {
+  if (ctx && ctx.plugins && ctx.plugins.taggableSchema) {
+    journalSchema.plugin(ctx.plugins.taggableSchema, { path: 'tags' });
+  }
+  return { Journal };
+};
+
 export default {
-  Journal
+  Journal,
+  applyContextPlugins
 }; 

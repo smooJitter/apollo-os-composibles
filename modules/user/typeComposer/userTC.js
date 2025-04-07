@@ -3,25 +3,27 @@
 import { schemaComposer } from 'graphql-compose';
 import { composeWithMongoose } from 'graphql-compose-mongoose';
 import createUserModel from '../models/userModel.js';
-import { ROLES, ROLE_VALUES } from '../../../config/enums/roles.js';
 import { plugins as sharedMongoosePlugins } from '../../../config/shared-mongoose/index.js';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+
+// Keep a reference to the UserTC
+let UserTC;
+let AuthPayloadTC;
 
 // Export a function to create the TypeComposer
-
-
-
-
-
-
 export const createUserTC = (ctx) => {
+  if (UserTC) {
+    return { UserTC, AuthPayloadTC };
+  }
+
   // Create the UserModel with context
   const UserModel = createUserModel({ 
-    enums: { roles: { ROLES, ROLE_VALUES } },
     sharedMongoose: { plugins: sharedMongoosePlugins }
   });
 
   // Create the TypeComposer
-  const UserTC = composeWithMongoose(UserModel, {
+  UserTC = composeWithMongoose(UserModel, {
     name: 'User',
     fields: {
       remove: ['password', '__v'],
@@ -47,11 +49,60 @@ export const createUserTC = (ctx) => {
   });
 
   // Define AuthPayload type
-  const AuthPayloadTC = schemaComposer.createObjectTC({
+  AuthPayloadTC = schemaComposer.createObjectTC({
     name: 'AuthPayload',
     fields: {
       token: 'String!',
       user: UserTC,
+    }
+  });
+
+  // Add permissions type
+  const PermissionTC = schemaComposer.createObjectTC({
+    name: 'Permission',
+    fields: {
+      resource: 'String!',
+      action: 'String!',
+      description: 'String',
+    }
+  });
+
+  // Add hasPermission field to User type
+  UserTC.addFields({
+    hasPermission: {
+      type: 'Boolean!',
+      args: {
+        permission: 'String!',
+      },
+      resolve: async (user, args) => {
+        return await user.hasPermission(args.permission);
+      },
+    },
+    permissions: {
+      type: [PermissionTC],
+      resolve: async (user) => {
+        if (!user.role) {
+          await user.populate('role');
+        }
+        
+        if (!user.role || !user.role.permissions) {
+          return [];
+        }
+        
+        // Format the permissions for GraphQL
+        return user.role.permissions.map(permission => {
+          if (permission === '*') {
+            return { resource: '*', action: '*', description: 'All permissions' };
+          }
+          
+          const [resource, action] = permission.split(':');
+          return {
+            resource,
+            action,
+            description: `Access to ${action} in ${resource}`
+          };
+        });
+      },
     }
   });
 
@@ -65,7 +116,7 @@ export const createUserTC = (ctx) => {
         return null;
       }
       
-      const user = await UserModel.findById(context.user.id);
+      const user = await UserModel.findById(context.user.id).populate('role');
       if (!user || !user.active) return null;
       return user;
     }
@@ -85,11 +136,18 @@ export const createUserTC = (ctx) => {
         throw new Error('Email already registered');
       }
 
+      // Find the default user role
+      const Role = context.models.Role;
+      const defaultRole = await Role.findOne({ name: 'user' });
+      if (!defaultRole) {
+        throw new Error('Default user role not found. Please initialize roles first.');
+      }
+
       const user = new UserModel({
         name,
         email,
         password,
-        role: 'user',
+        role: defaultRole._id,
         active: true,
       });
 
@@ -102,7 +160,7 @@ export const createUserTC = (ctx) => {
       }
 
       const token = jwtUtil.sign(
-        { id: user._id, email: user.email, role: user.role },
+        { id: user._id, email: user.email },
         process.env.JWT_SECRET || 'dev-secret-key',
         { expiresIn: '1d' }
       );
@@ -120,7 +178,7 @@ export const createUserTC = (ctx) => {
     resolve: async ({ args, context }) => {
       const { email, password } = args.input;
       
-      const user = await UserModel.findOne({ email });
+      const user = await UserModel.findOne({ email }).select('+password');
       if (!user) {
         throw new Error('Invalid email or password');
       }
@@ -141,7 +199,7 @@ export const createUserTC = (ctx) => {
       }
 
       const token = jwtUtil.sign(
-        { id: user._id, email: user.email, role: user.role },
+        { id: user._id, email: user.email },
         process.env.JWT_SECRET || 'dev-secret-key',
         { expiresIn: '1d' }
       );
@@ -470,5 +528,28 @@ export const createUserTC = (ctx) => {
     }
   });
 
-  return { UserTC, RegisterInputTC, LoginInputTC, AuthPayloadTC };
+  return { UserTC, AuthPayloadTC };
 };
+
+// Helper to get the UserTC
+export const getUserTC = () => {
+  if (!UserTC) {
+    const result = createUserTC();
+    return result.UserTC;
+  }
+  return UserTC;
+};
+
+// Helper to get the AuthPayloadTC
+export const getAuthPayloadTC = () => {
+  if (!AuthPayloadTC) {
+    const result = createUserTC();
+    return result.AuthPayloadTC;
+  }
+  return AuthPayloadTC;
+};
+
+// Initialize type composers immediately
+createUserTC();
+
+export default { getUserTC, getAuthPayloadTC, createUserTC };

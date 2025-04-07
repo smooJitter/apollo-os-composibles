@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Promise from 'bluebird';
 import * as R from 'ramda';
+import { validateLogin } from '../validators/auth.js';
 
 // Helper for handling errors in a functional way
 const handleError = (message) => (error) => {
@@ -117,4 +118,55 @@ export const loginUser = ({ models }) => input => {
     console.error('[User Login] Error during login:', error);
     throw new Error(error.message || 'Authentication failed');
   });
+};
+
+/**
+ * Login action - authenticates a user and returns token
+ * 
+ * @param {Object} deps - Dependencies
+ * @returns {Function} - Login function
+ */
+export const loginAction = ({ models }) => {
+  const User = models.User;
+  
+  /**
+   * Login a user with username and password
+   * 
+   * @param {Object} credentials - User credentials
+   * @param {string} credentials.username - Username
+   * @param {string} credentials.password - Password
+   * @returns {Promise<Object>} - User and token
+   */
+  return async (credentials) => {
+    // Validate input
+    await validateLogin(credentials);
+    
+    // Destructure credentials
+    const { username, password } = credentials;
+    
+    // Find user
+    const user = await User.findOne({ 
+      username: username.toLowerCase(),
+      isActive: true
+    });
+    
+    // Check if user exists
+    if (!user) {
+      throw new Error('Invalid credentials');
+    }
+    
+    // Check password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      throw new Error('Invalid credentials');
+    }
+    
+    // Generate token
+    const token = user.generateAuthToken();
+    
+    return {
+      user,
+      token
+    };
+  };
 };

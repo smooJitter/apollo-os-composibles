@@ -5,7 +5,7 @@ export function scoreablePlugin(schema, options = {}) {
     field = 'scores',
     allowedTypes = ['general', 'quality', 'helpfulness', 'difficulty'], // Extended example
     preventDuplicates = true,
-    trackUser = true
+    trackUser = true,
   } = options;
 
   const scoreSchemaDefinition = {
@@ -22,7 +22,7 @@ export function scoreablePlugin(schema, options = {}) {
   const ScoreSchema = new mongoose.Schema(scoreSchemaDefinition, { _id: false });
 
   schema.add({
-    [field]: [ScoreSchema] // Embed the schema definition
+    [field]: [ScoreSchema], // Embed the schema definition
   });
 
   // Add a score (upsert-style)
@@ -41,9 +41,9 @@ export function scoreablePlugin(schema, options = {}) {
     if (trackUser && preventDuplicates && user) {
       const userIdString = user._id ? user._id.toString() : user.toString();
       const existingIndex = scores.findIndex(
-        s => s.type === type && s.user?.toString() === userIdString
+        (s) => s.type === type && s.user?.toString() === userIdString
       );
-      
+
       if (existingIndex !== -1) {
         // Update score
         scores[existingIndex].value = value;
@@ -54,29 +54,29 @@ export function scoreablePlugin(schema, options = {}) {
 
     // Add new score if not updated
     if (!updated) {
-        const newScore = { type, value, weight };
-        if (trackUser && user) {
-            newScore.user = user._id || user; // Store ObjectId
-        }
-        scores.push(newScore);
+      const newScore = { type, value, weight };
+      if (trackUser && user) {
+        newScore.user = user._id || user; // Store ObjectId
+      }
+      scores.push(newScore);
     }
-    
+
     this.markModified(field); // Important for embedded arrays
     return this;
   };
 
   // Get score average for a specific type
   schema.methods.getScoreAvg = function (type = 'general') {
-    const scores = this[field].filter(s => s.type === type);
+    const scores = this[field].filter((s) => s.type === type);
     if (scores.length === 0) return 0;
     const totalWeight = scores.reduce((acc, s) => acc + (s.weight || 1), 0);
-    const weightedSum = scores.reduce((acc, s) => acc + (s.value * (s.weight || 1)), 0);
+    const weightedSum = scores.reduce((acc, s) => acc + s.value * (s.weight || 1), 0);
     return totalWeight === 0 ? 0 : +(weightedSum / totalWeight).toFixed(2);
   };
 
   // Count scores by type
   schema.methods.getScoreCount = function (type = 'general') {
-    return this[field].filter(s => s.type === type).length;
+    return this[field].filter((s) => s.type === type).length;
   };
 
   // Score summary breakdown
@@ -85,9 +85,9 @@ export function scoreablePlugin(schema, options = {}) {
     for (const type of allowedTypes) {
       summary[type] = {
         count: this.getScoreCount(type),
-        average: this.getScoreAvg(type)
+        average: this.getScoreAvg(type),
       };
     }
     return summary;
   };
-} 
+}

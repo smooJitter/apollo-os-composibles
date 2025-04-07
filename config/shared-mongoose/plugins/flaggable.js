@@ -4,20 +4,20 @@ export function flaggablePlugin(schema, options = {}) {
   const {
     field = 'flags',
     allowedFlags = null, // e.g. ['featured', 'pinned', 'archived']
-    trackTimestamps = false
+    trackTimestamps = false,
   } = options;
 
   // Define the structure for each flag entry
   const flagFieldDefinition = trackTimestamps
     ? {
         value: { type: Boolean, default: false },
-        changedAt: { type: Date }
+        changedAt: { type: Date },
       }
     : { type: Boolean, default: false };
 
   // Add the flags field to the schema using mongoose.Schema.Types.Map
   schema.add({
-    [field]: { type: Map, of: new mongoose.Schema(flagFieldDefinition, {_id: false}) } // Embed schema for complex types
+    [field]: { type: Map, of: new mongoose.Schema(flagFieldDefinition, { _id: false }) }, // Embed schema for complex types
   });
 
   // Method to set a flag
@@ -34,7 +34,7 @@ export function flaggablePlugin(schema, options = {}) {
     if (trackTimestamps) {
       flagData = {
         value: !!value, // Ensure boolean
-        changedAt: new Date()
+        changedAt: new Date(),
       };
     } else {
       flagData = !!value; // Ensure boolean
@@ -55,8 +55,8 @@ export function flaggablePlugin(schema, options = {}) {
   // Remove a flag
   schema.methods.clearFlag = function (flagName) {
     if (this[field]?.has(flagName)) {
-        this[field].delete(flagName);
-        this.markModified(field); // Mark modified when deleting from Map
+      this[field].delete(flagName);
+      this.markModified(field); // Mark modified when deleting from Map
     }
     return this;
   };
@@ -65,18 +65,18 @@ export function flaggablePlugin(schema, options = {}) {
   schema.methods.getActiveFlags = function () {
     const active = {};
     if (this[field]) {
-        this[field].forEach((flagData, flagName) => {
-            const isFlagActive = trackTimestamps ? flagData?.value === true : flagData === true;
-            if (isFlagActive) {
-                active[flagName] = flagData;
-            }
-        });
+      this[field].forEach((flagData, flagName) => {
+        const isFlagActive = trackTimestamps ? flagData?.value === true : flagData === true;
+        if (isFlagActive) {
+          active[flagName] = flagData;
+        }
+      });
     }
     return active;
   };
 
   // Static method to get allowed flags (if defined)
-  schema.statics.getAllowedFlags = function() {
-      return allowedFlags;
+  schema.statics.getAllowedFlags = function () {
+    return allowedFlags;
   };
-} 
+}

@@ -57,12 +57,12 @@ export class NotFoundError extends ApolloosError {
 }
 
 export class ValidationError extends ApolloosError {
-    constructor(message = 'Validation failed.', invalidArgs = {}, extensions = {}) {
-        super(message, APOLLO_ERROR_CODES.VALIDATION_FAILED, {
-            ...extensions,
-            invalidArgs // Include details about validation failures
-        });
-    }
+  constructor(message = 'Validation failed.', invalidArgs = {}, extensions = {}) {
+    super(message, APOLLO_ERROR_CODES.VALIDATION_FAILED, {
+      ...extensions,
+      invalidArgs, // Include details about validation failures
+    });
+  }
 }
 
 // --- Factory Functions (Optional but convenient) ---
@@ -88,7 +88,7 @@ export const createNotFoundError = (message, extensions) => {
 };
 
 export const createValidationError = (message, invalidArgs, extensions) => {
-    return new ValidationError(message, invalidArgs, extensions);
+  return new ValidationError(message, invalidArgs, extensions);
 };
 
 // You might also add helpers here to format Mongoose validation errors

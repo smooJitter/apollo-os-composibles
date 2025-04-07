@@ -1,5 +1,6 @@
 // index.js placeholder
-import { ApolloServerPlugin } from '@apollo/server'; // Base type
+// ApolloServerPlugin type is used for JSDoc annotations only
+import '@apollo/server';
 import { createForbiddenError } from '@apolloos/error-utils';
 
 /**
@@ -7,7 +8,7 @@ import { createForbiddenError } from '@apolloos/error-utils';
  * Demonstrates accessing the ApolloOS context (ctx) within a plugin.
  * @param {object} [options={}] - Optional configuration for the plugin.
  * @param {object} options.logger - A logger instance (defaults to console).
- * @returns {ApolloServerPlugin}
+ * @returns {object} An Apollo Server plugin object
  */
 export const createBasicLoggerPlugin = (options = {}) => {
   const logger = options.logger || console;
@@ -19,7 +20,7 @@ export const createBasicLoggerPlugin = (options = {}) => {
       // Access ApolloOS context if passed during server setup
       const apolloosContext = requestContext.contextValue;
       const operationName = requestContext.request.operationName || 'anonymous';
-      
+
       logger.info(`[Plugin:Logger] Request started! Operation: ${operationName}`, {
         query: requestContext.request.query?.substring(0, 100) + '...', // Log truncated query
         variables: requestContext.request.variables,
@@ -38,29 +39,34 @@ export const createBasicLoggerPlugin = (options = {}) => {
         async validationDidStart(requestContext) {
           logger.debug(`[Plugin:Logger] Validation started! Operation: ${operationName}`);
         },
-        
+
         // Fires before Apollo Server executes the GraphQL query.
         // Useful for adding context or performing checks.
         async didResolveSource(requestContext) {
-             logger.debug(`[Plugin:Logger] Source resolved. Operation: ${operationName}`);
+          logger.debug(`[Plugin:Logger] Source resolved. Operation: ${operationName}`);
         },
-        
+
         // Fires before field resolvers run
         async executionDidStart(requestContext) {
-             logger.debug(`[Plugin:Logger] Execution started. Operation: ${operationName}`);
+          logger.debug(`[Plugin:Logger] Execution started. Operation: ${operationName}`);
         },
 
         // Fires when the execution process encounters errors.
         async didEncounterErrors(requestContext) {
-            logger.error(`[Plugin:Logger] Error during request! Operation: ${operationName}`, {
-                errors: requestContext.errors.map(e => ({ message: e.message, code: e.extensions?.code })),
-            });
+          logger.error(`[Plugin:Logger] Error during request! Operation: ${operationName}`, {
+            errors: requestContext.errors.map((e) => ({
+              message: e.message,
+              code: e.extensions?.code,
+            })),
+          });
         },
 
         // Fires whenever Apollo Server is about to send a response for a GraphQL operation.
         async willSendResponse(requestContext) {
           const duration = Date.now() - startTime;
-          logger.info(`[Plugin:Logger] Request finished. Operation: ${operationName}. Duration: ${duration}ms`);
+          logger.info(
+            `[Plugin:Logger] Request finished. Operation: ${operationName}. Duration: ${duration}ms`
+          );
         },
       };
     },
@@ -70,25 +76,24 @@ export const createBasicLoggerPlugin = (options = {}) => {
 /**
  * Example Plugin: Enforces a simple IP-based block.
  * Demonstrates modifying context or throwing errors early in the request lifecycle.
- * @param {object} [options={}] 
+ * @param {object} [options={}]
  * @param {string[]} options.blockedIPs - Array of IP addresses to block.
- * @returns {ApolloServerPlugin}
+ * @returns {object} An Apollo Server plugin object
  */
 export const createIPBlockerPlugin = (options = {}) => {
-    const blockedIPs = options.blockedIPs || [];
-    
-    return {
-        async requestDidStart(requestContext) {
-            const clientIP = requestContext.contextValue?.req?.ip; // Assuming Express context
-            if (clientIP && blockedIPs.includes(clientIP)) {
-                console.warn(`[Plugin:IPBlocker] Blocked request from IP: ${clientIP}`);
-                // Throw an Apollo-compatible error
-                throw createForbiddenError('Access denied from your IP address.');
-            }
-        },
-    };
-};
+  const blockedIPs = options.blockedIPs || [];
 
+  return {
+    async requestDidStart(requestContext) {
+      const clientIP = requestContext.contextValue?.req?.ip; // Assuming Express context
+      if (clientIP && blockedIPs.includes(clientIP)) {
+        console.warn(`[Plugin:IPBlocker] Blocked request from IP: ${clientIP}`);
+        // Throw an Apollo-compatible error
+        throw createForbiddenError('Access denied from your IP address.');
+      }
+    },
+  };
+};
 
 // --- Add more plugin utilities or factories below ---
 // E.g., tracing plugins, metrics collectors, custom auth plugins

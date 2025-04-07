@@ -9,11 +9,13 @@ import { printSchema } from 'graphql';
  */
 export function inspectModules(ctx) {
   if (!ctx.app?.getModules) {
-    console.warn('[devtools] Cannot inspect modules: App instance not found or invalid on context.');
+    console.warn(
+      '[devtools] Cannot inspect modules: App instance not found or invalid on context.'
+    );
     return [];
   }
   const modules = ctx.app.getModules(); // Gets the module definition objects
-  return modules.map(mod => ({
+  return modules.map((mod) => ({
     id: mod.id,
     meta: mod.meta || {},
     hasOnLoad: typeof mod.onLoad === 'function',
@@ -38,7 +40,9 @@ export function inspectModules(ctx) {
  */
 export function inspectTypeComposers(ctx) {
   if (!ctx.graphqlRegistry?.typeComposers) {
-    console.warn('[devtools] Cannot inspect TypeComposers: ctx.graphqlRegistry.typeComposers not found.');
+    console.warn(
+      '[devtools] Cannot inspect TypeComposers: ctx.graphqlRegistry.typeComposers not found.'
+    );
     return {};
   }
   const registry = ctx.graphqlRegistry.typeComposers;
@@ -51,8 +55,8 @@ export function inspectTypeComposers(ctx) {
         // Add more details as needed (e.g., relations, interfaces)
       };
     } catch (err) {
-        console.error(`[devtools] Error inspecting TypeComposer '${name}':`, err);
-        acc[name] = { error: 'Failed to inspect' };
+      console.error(`[devtools] Error inspecting TypeComposer '${name}':`, err);
+      acc[name] = { error: 'Failed to inspect' };
     }
     return acc;
   }, {});
@@ -89,27 +93,29 @@ export function printComposedSchema(schema, logToConsole = true) {
  * @param {object} ctx - The ApolloOS context.
  */
 export function inspectContext(ctx) {
-    console.log('\n----- ApolloOS Context Inspection -----');
-    const inspectObj = {};
-    for (const key in ctx) {
-        if (Object.hasOwnProperty.call(ctx, key)) {
-            const value = ctx[key];
-            if (typeof value === 'function') {
-                inspectObj[key] = `[Function: ${value.name || 'anonymous'}]`;
-            } else if (typeof value === 'object' && value !== null) {
-                // Avoid logging potentially large objects like the app or mongoose instance deeply
-                if (key === 'app' || key === 'mongoose' || key === 'req') {
-                     inspectObj[key] = `[Object: ${value.constructor?.name || 'Object'}] (Keys: ${Object.keys(value).slice(0,5).join(', ')}...)`;
-                } else {
-                    inspectObj[key] = `[Object: ${value.constructor?.name || 'Object'}] (Keys: ${Object.keys(value).join(', ')})`;
-                }
-            } else {
-                inspectObj[key] = value;
-            }
+  console.log('\n----- ApolloOS Context Inspection -----');
+  const inspectObj = {};
+  for (const key in ctx) {
+    if (Object.hasOwnProperty.call(ctx, key)) {
+      const value = ctx[key];
+      if (typeof value === 'function') {
+        inspectObj[key] = `[Function: ${value.name || 'anonymous'}]`;
+      } else if (typeof value === 'object' && value !== null) {
+        // Avoid logging potentially large objects like the app or mongoose instance deeply
+        if (key === 'app' || key === 'mongoose' || key === 'req') {
+          inspectObj[key] =
+            `[Object: ${value.constructor?.name || 'Object'}] (Keys: ${Object.keys(value).slice(0, 5).join(', ')}...)`;
+        } else {
+          inspectObj[key] =
+            `[Object: ${value.constructor?.name || 'Object'}] (Keys: ${Object.keys(value).join(', ')})`;
         }
+      } else {
+        inspectObj[key] = value;
+      }
     }
-    console.log(inspectObj);
-    console.log('-------------------------------------\n');
+  }
+  console.log(inspectObj);
+  console.log('-------------------------------------\n');
 }
 
 // Add more devtools as needed, e.g., performance timers, dependency graph visualizer

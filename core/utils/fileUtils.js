@@ -35,7 +35,7 @@ export async function findFilesByExtension(dirPath, extension = '.js') {
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isDirectory()) {
-        files.push(...await findFilesByExtension(fullPath, extension));
+        files.push(...(await findFilesByExtension(fullPath, extension)));
       } else if (entry.isFile() && entry.name.endsWith(extension)) {
         files.push(fullPath);
       }
@@ -43,7 +43,7 @@ export async function findFilesByExtension(dirPath, extension = '.js') {
   } catch (err) {
     // Ignore errors like permission denied for specific subdirs, log others
     if (err.code !== 'EACCES' && err.code !== 'ENOENT') {
-        console.error(`[fileUtils] Error walking directory ${dirPath}:`, err);
+      console.error(`[fileUtils] Error walking directory ${dirPath}:`, err);
     }
   }
   return files;

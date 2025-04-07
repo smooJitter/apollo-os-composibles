@@ -14,6 +14,5 @@ export function registerGlobalRelations({ schemaComposer, ctx }) {
   // if (UserTC && ProfileTC) {
   //   // Define relation logic here using UserTC.addRelation(...)
   // }
-
   // ctx.logger?.info('[GraphQL] Global relations registered.');
 }

@@ -37,17 +37,17 @@ apollo-os-framework/
 
 Each package lives under `packages/` and can be imported via `@apolloos/*`.
 
-| Package                         | Purpose                                        |
-|----------------------------------|------------------------------------------------|
-| `@apolloos/module-utils`         | Composable module helpers                     |
-| `@apolloos/schema-utils`         | Schema merge helpers for GCM + TC             |
-| `@apolloos/resolver-utils`       | Secure, scoped resolver middleware             |
-| `@apolloos/error-utils`          | Apollo-compliant error classes                 |
-| `@apolloos/graphql-config-utils` | Shared scalars, field wrappers, relations      |
-| `@apolloos/plugin-utils`         | Apollo plugin composition (tracing, logging)   |
-| `@apolloos/devtools`             | Schema explorer + module meta extractor        |
-| `@apolloos/testing-utils`        | Mocks for ctx, modules, resolvers              |
-| `@apolloos/hooks` (optional)     | Lifecycle hooks registry                       |
+| Package                          | Purpose                                      |
+| -------------------------------- | -------------------------------------------- |
+| `@apolloos/module-utils`         | Composable module helpers                    |
+| `@apolloos/schema-utils`         | Schema merge helpers for GCM + TC            |
+| `@apolloos/resolver-utils`       | Secure, scoped resolver middleware           |
+| `@apolloos/error-utils`          | Apollo-compliant error classes               |
+| `@apolloos/graphql-config-utils` | Shared scalars, field wrappers, relations    |
+| `@apolloos/plugin-utils`         | Apollo plugin composition (tracing, logging) |
+| `@apolloos/devtools`             | Schema explorer + module meta extractor      |
+| `@apolloos/testing-utils`        | Mocks for ctx, modules, resolvers            |
+| `@apolloos/hooks` (optional)     | Lifecycle hooks registry                     |
 
 ---
 

@@ -1,32 +1,30 @@
 // plugins/status-trackable-meta.js
+import mongoose from 'mongoose';
+import { STATUS_META, STATUS_ENUMS } from '../constants/status.constants.js';
 
-const { STATUS_META, STATUS_ENUMS } = require('../constants/status.constants');
-
-module.exports = function statusTrackableWithMetaPlugin(schema, options = {}) {
-  const {
-    field = 'status',
-    userField = 'updatedBy',
-    trackHistory = true
-  } = options;
+export function statusTrackableWithMetaPlugin(schema, options = {}) {
+  const { field = 'status', userField = 'updatedBy', trackHistory = true } = options;
 
   // Core field
   schema.add({
     [field]: {
       type: String,
       enum: STATUS_ENUMS,
-      default: STATUS_ENUMS[0]
-    }
+      default: STATUS_ENUMS[0],
+    },
   });
 
   // Optional status history
   if (trackHistory) {
     schema.add({
-      [`${field}History`]: [{
-        value: { type: String, enum: STATUS_ENUMS },
-        changedAt: { type: Date, default: Date.now },
-        [userField]: { type: require('mongoose').Schema.Types.ObjectId, ref: 'User' },
-        reason: String
-      }]
+      [`${field}History`]: [
+        {
+          value: { type: String, enum: STATUS_ENUMS },
+          changedAt: { type: Date, default: Date.now },
+          [userField]: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          reason: String,
+        },
+      ],
     });
   }
 
@@ -53,7 +51,7 @@ module.exports = function statusTrackableWithMetaPlugin(schema, options = {}) {
         value: newStatus,
         changedAt: new Date(),
         [userField]: updatedBy,
-        reason
+        reason,
       });
     }
 
@@ -75,4 +73,4 @@ module.exports = function statusTrackableWithMetaPlugin(schema, options = {}) {
   schema.statics.getAllStatusMeta = function () {
     return STATUS_META;
   };
-};
+}

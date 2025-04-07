@@ -7,7 +7,7 @@
   "exports": {
     ".": "./index.js"
   },
-   "dependencies": {
-     "graphql": "^16.8.0" 
+  "dependencies": {
+    "graphql": "^16.8.0"
   }
-} 
+}

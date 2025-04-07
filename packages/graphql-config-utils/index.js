@@ -9,7 +9,7 @@ export const applyStandardTCConfig = (tc) => {
 
   // Example: Remove standard Mongoose fields if they exist
   if (tc.hasField('__v')) {
-      tc.removeField('__v');
+    tc.removeField('__v');
   }
   // Add more standard configurations here if needed
   // e.g., tc.setResolverPriority(...);
@@ -19,7 +19,7 @@ export const applyStandardTCConfig = (tc) => {
 // Example: Exporting shared options for composeWithMongoose
 export const standardComposeOptions = {
   // Example: Default fields to remove from all composed types
-  removeFields: ['__v'], 
+  removeFields: ['__v'],
   // Add other standard options here
 };
 

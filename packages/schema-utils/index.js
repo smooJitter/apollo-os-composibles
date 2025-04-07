@@ -49,17 +49,21 @@ export const addSimpleRelation = ({
   resolverName,
   prepareArgs,
   projection = { _id: true }, // Default projection
-  description
+  description,
 }) => {
   if (!sourceTC || !targetTC) {
-    console.warn(`[addSimpleRelation] Missing sourceTC or targetTC for relation '${fieldName}'. Skipping.`);
+    console.warn(
+      `[addSimpleRelation] Missing sourceTC or targetTC for relation '${fieldName}'. Skipping.`
+    );
     return;
   }
-  
+
   const resolver = targetTC.getResolver(resolverName);
   if (!resolver) {
-      console.warn(`[addSimpleRelation] Resolver '${resolverName}' not found on targetTC '${targetTC.getTypeName()}' for relation '${fieldName}'. Skipping.`);
-      return;
+    console.warn(
+      `[addSimpleRelation] Resolver '${resolverName}' not found on targetTC '${targetTC.getTypeName()}' for relation '${fieldName}'. Skipping.`
+    );
+    return;
   }
 
   sourceTC.addRelation(fieldName, {
@@ -80,32 +84,37 @@ export const addSimpleRelation = ({
  * @returns {Resolver}
  */
 export const withPaginationArgs = (resolver, defaultPagination = { limit: 20, skip: 0 }) => {
-    if (!resolver) return resolver;
+  if (!resolver) return resolver;
 
-    resolver.addArgs({
-        limit: {
-            type: 'Int',
-            description: 'Number of records to return',
-            defaultValue: defaultPagination.limit,
-        },
-        skip: {
-            type: 'Int',
-            description: 'Number of records to skip',
-            defaultValue: defaultPagination.skip,
-        },
-        // You could add cursor-based pagination args here too
-    });
-    
-    // Optional: Add validation logic
-    resolver.wrapArgs((args) => {
-        if (args.limit < 1 || args.limit > 100) { // Example limits
-           throw createUserInputError('Limit must be between 1 and 100.', { invalidArgs: { limit: args.limit }});
-        }
-        if (args.skip < 0) {
-           throw createUserInputError('Skip must be a non-negative number.', { invalidArgs: { skip: args.skip }});
-        }
-        return args;
-    });
+  resolver.addArgs({
+    limit: {
+      type: 'Int',
+      description: 'Number of records to return',
+      defaultValue: defaultPagination.limit,
+    },
+    skip: {
+      type: 'Int',
+      description: 'Number of records to skip',
+      defaultValue: defaultPagination.skip,
+    },
+    // You could add cursor-based pagination args here too
+  });
 
-    return resolver;
+  // Optional: Add validation logic
+  resolver.wrapArgs((args) => {
+    if (args.limit < 1 || args.limit > 100) {
+      // Example limits
+      throw createUserInputError('Limit must be between 1 and 100.', {
+        invalidArgs: { limit: args.limit },
+      });
+    }
+    if (args.skip < 0) {
+      throw createUserInputError('Skip must be a non-negative number.', {
+        invalidArgs: { skip: args.skip },
+      });
+    }
+    return args;
+  });
+
+  return resolver;
 };

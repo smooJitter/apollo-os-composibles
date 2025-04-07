@@ -3,6 +3,8 @@ import Promise from 'bluebird';
 import { createUserInputError } from '@apolloos/error-utils';
 import { validateRegistrationInputAsync } from '../lib/validators.js';
 import { promisePipe, apiResponse, withRetry } from '../lib/promiseUtils.js';
+import * as R from 'ramda';
+import { validateRegistration } from '../validators/auth.js';
 
 /**
  * Handles user registration.
@@ -111,3 +113,55 @@ export const registerUser = apiResponse((input, ctx) => {
       });
     });
 });
+
+/**
+ * Register action - creates a new user
+ * 
+ * @param {Object} deps - Dependencies
+ * @returns {Function} - Register function
+ */
+export const registerAction = ({ models }) => {
+  const User = models.User;
+  
+  /**
+   * Register a new user
+   * 
+   * @param {Object} userData - User data
+   * @param {string} userData.username - Username
+   * @param {string} userData.email - Email
+   * @param {string} userData.password - Password
+   * @param {string} [userData.firstName] - First name
+   * @param {string} [userData.lastName] - Last name
+   * @param {string} [userData.role] - User role (defaults to 'user')
+   * @returns {Promise<Object>} - Created user
+   */
+  return async (userData) => {
+    // Validate input
+    await validateRegistration(userData);
+    
+    // Check if username exists
+    const existingUsername = await User.findOne({ username: userData.username.toLowerCase() });
+    if (existingUsername) {
+      throw new Error('Username already taken');
+    }
+    
+    // Check if email exists
+    const existingEmail = await User.findOne({ email: userData.email.toLowerCase() });
+    if (existingEmail) {
+      throw new Error('Email already registered');
+    }
+    
+    // Create new user
+    const user = new User({
+      ...userData,
+      username: userData.username.toLowerCase(),
+      email: userData.email.toLowerCase(),
+      role: userData.role || 'user'
+    });
+    
+    // Save user to database
+    await user.save();
+    
+    return user;
+  };
+};

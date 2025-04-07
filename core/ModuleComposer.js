@@ -1,5 +1,6 @@
 // core/ModuleComposer.js
 import { schemaComposer } from 'graphql-compose';
+import { GraphQLScalarType } from 'graphql';
 // We might not need Ramda here unless doing complex functional composition on the results
 // import * as R from 'ramda';
 
@@ -26,16 +27,20 @@ export function composeSchema(ctx) {
   schemaComposer.clear();
 
   // Add custom scalars from config
-  if (ctx.graphqlConfig?.customScalars && typeof schemaComposer.addScalar === 'function') {
+  if (ctx.graphqlConfig?.customScalars) {
     try {
       Object.entries(ctx.graphqlConfig.customScalars).forEach(([name, scalar]) => {
-        schemaComposer.addScalar(scalar);
+        // Check if scalar is a GraphQLScalarType
+        if (scalar instanceof GraphQLScalarType) {
+          ctx.logger?.debug(`[ModuleComposer] Adding scalar: ${name}`);
+          schemaComposer.createScalarTC(scalar);
+        } else {
+          ctx.logger?.warn(`[ModuleComposer] Invalid scalar ${name} - not a GraphQLScalarType`);
+        }
       });
     } catch (err) {
       ctx.logger?.warn(`[ModuleComposer] Error adding custom scalars: ${err.message}. Continuing without custom scalars.`);
     }
-  } else if (ctx.graphqlConfig?.customScalars) {
-    ctx.logger?.warn('[ModuleComposer] schemaComposer.addScalar is not a function. Custom scalars will not be added.');
   }
 
   // Register all module typeComposers
@@ -65,18 +70,28 @@ export function composeSchema(ctx) {
   // Collect and merge all module resolvers
   for (const mod of modules) {
     const moduleResolvers = graphqlRegistry.resolvers[mod.id];
-    if (!moduleResolvers) continue;
+    if (!moduleResolvers) {
+      console.log(`[ModuleComposer] No resolvers found for module ${mod.id}. Has resolvers: ${!!mod.resolvers}`);
+      if (mod.resolvers) {
+        console.log(`[ModuleComposer] Module ${mod.id} resolver keys:`, Object.keys(mod.resolvers));
+      }
+      continue;
+    }
 
     // Add module queries to the root Query type
     if (moduleResolvers.Query) {
-      ctx.logger?.debug(`[ModuleComposer] Found queries in module ${mod.id}`);
+      console.log(`[ModuleComposer] Found queries in module ${mod.id}:`, Object.keys(moduleResolvers.Query));
       Object.assign(rootQueries, moduleResolvers.Query);
+    } else {
+      console.log(`[ModuleComposer] No queries found in module ${mod.id}`);
     }
 
     // Add module mutations to the root Mutation type
     if (moduleResolvers.Mutation) {
-      ctx.logger?.debug(`[ModuleComposer] Found mutations in module ${mod.id}`);
+      console.log(`[ModuleComposer] Found mutations in module ${mod.id}:`, Object.keys(moduleResolvers.Mutation));
       Object.assign(rootMutations, moduleResolvers.Mutation);
+    } else {
+      console.log(`[ModuleComposer] No mutations found in module ${mod.id}`);
     }
   }
 

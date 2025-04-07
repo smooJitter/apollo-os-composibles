@@ -1,5 +1,6 @@
 // modules/user/actions/index.js
-import { loginUser } from './login.js';
+import { loginAction } from './login.js';
+import { registerAction } from './register.js';
 import bcrypt from 'bcryptjs';
 import Promise from 'bluebird';
 import * as R from 'ramda';
@@ -115,10 +116,10 @@ export const registerUser = ({ models }) => input => {
   });
 };
 
-// Export actions with a consistent interface
-export const userActions = {
-  loginUser,
-  registerUser
+// Export all user actions
+export {
+  loginAction,
+  registerAction
 };
 
 // Use a more functional approach for exporting actions

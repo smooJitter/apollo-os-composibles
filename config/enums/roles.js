@@ -3,7 +3,7 @@ export const ROLES = {
   USER: 'user',
   ADMIN: 'admin',
   MODERATOR: 'moderator',
-  DEVELOPER: 'developer'
+  DEVELOPER: 'developer',
 };
 
 export const ROLE_VALUES = Object.values(ROLES);

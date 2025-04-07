@@ -8,7 +8,7 @@ import { timetrackablePlugin } from './plugins/timetrackable.js';
 import { scoreablePlugin } from './plugins/scoreable.js';
 import { scoreableFlexPlugin } from './plugins/scoreable-flex.js';
 import { flaggablePlugin } from './plugins/flaggable.js';
-import { engageablePlugin } from './plugins/engageable.js';
+// import { engageablePlugin } from './plugins/engageable.js'; // TODO: Implement this plugin
 import { statusTrackableFlexPlugin } from './plugins/status-trackable-flex.js';
 
 export const plugins = {
@@ -21,7 +21,7 @@ export const plugins = {
   scoreable: scoreablePlugin,
   scoreableFlex: scoreableFlexPlugin,
   flaggable: flaggablePlugin,
-  engageable: engageablePlugin,
+  // engageable: engageablePlugin, // TODO: Implement this plugin
   statusTrackableFlex: statusTrackableFlexPlugin,
   // Add other shared plugins here
 };

@@ -2,16 +2,28 @@ import { schemaComposer } from 'graphql-compose';
 
 /**
  * Creates and registers models for a module
- * @param {Object} schemaCreators - Functions that create models
+ * @param {Object} schemaCreators - Functions that create models or model objects
  * @returns {Function} - Higher-order function that takes context and returns updated context
  */
 export const withModels = (schemaCreators) => (ctx) => {
   const models = {};
   
+  if (!schemaCreators) {
+    ctx.logger?.warn('[Module Composer] No schema creators provided');
+    return { ...ctx, models };
+  }
+  
   // Create all models in the schema map
-  for (const [modelName, createSchema] of Object.entries(schemaCreators)) {
-    models[modelName] = createSchema(ctx);
-    ctx.logger?.debug(`[Module Composer] Created model: ${modelName}`);
+  for (const [modelName, modelOrCreator] of Object.entries(schemaCreators)) {
+    // Handle both direct model objects and creator functions
+    if (typeof modelOrCreator === 'function' && !modelOrCreator.modelName) {
+      // It's a creator function
+      models[modelName] = modelOrCreator(ctx);
+    } else {
+      // It's already a model
+      models[modelName] = modelOrCreator;
+    }
+    ctx.logger?.debug(`[Module Composer] Added model: ${modelName}`);
   }
   
   return { ...ctx, models };
@@ -22,7 +34,7 @@ export const withModels = (schemaCreators) => (ctx) => {
  * @returns {Function} - Higher-order function that takes context and returns updated context
  */
 export const withTypeComposers = () => (ctx) => {
-  const { models, composeWithMongoose } = ctx;
+  const { models } = ctx;
   const typeComposers = {};
   
   if (!models) {
@@ -30,29 +42,48 @@ export const withTypeComposers = () => (ctx) => {
     return { ...ctx, typeComposers };
   }
   
+  // Use composeWithMongoose from context if available
+  const composeWithMongoose = ctx.composeWithMongoose || (
+    ctx.graphqlRegistry && ctx.graphqlRegistry.composeWithMongoose
+  );
+  
   // Create a TypeComposer for each model
   for (const [modelName, model] of Object.entries(models)) {
-    if (typeof composeWithMongoose !== 'function') {
-      ctx.logger?.error('[Module Composer] composeWithMongoose is not available in context');
-      continue;
+    // Skip if model is falsy
+    if (!model) continue;
+    
+    try {
+      // Check if we need to compose with mongoose or if we're using schemaComposer directly
+      if (model.schema && typeof composeWithMongoose === 'function') {
+        // Use mongoose composer
+        const TC = composeWithMongoose(model);
+        typeComposers[`${modelName}TC`] = TC;
+        
+        // Register in schema
+        if (!schemaComposer.has(TC.getTypeName())) {
+          schemaComposer.add(TC);
+          ctx.logger?.debug(`[Module Composer] Added ${modelName} TypeComposer to schema`);
+        }
+      } else if (ctx.typeComposers && ctx.typeComposers[`${modelName}TC`]) {
+        // Use existing TypeComposer if available
+        typeComposers[`${modelName}TC`] = ctx.typeComposers[`${modelName}TC`];
+        ctx.logger?.debug(`[Module Composer] Using existing TypeComposer: ${modelName}TC`);
+      } else {
+        // Skip this model if we can't compose it
+        ctx.logger?.warn(`[Module Composer] Couldn't create TypeComposer for ${modelName}`);
+        continue;
+      }
+      
+      // Register in registry if available
+      if (ctx.graphqlRegistry && ctx.graphqlRegistry.typeComposers) {
+        ctx.graphqlRegistry.typeComposers[`${modelName}TC`] = typeComposers[`${modelName}TC`];
+        ctx.logger?.debug(`[Module Composer] Registered ${modelName}TC in graphql registry`);
+      }
+      
+      ctx.logger?.debug(`[Module Composer] Created TypeComposer: ${modelName}TC`);
+    } catch (error) {
+      ctx.logger?.error(`[Module Composer] Error creating TypeComposer for ${modelName}: ${error.message}`);
     }
-    
-    const TC = composeWithMongoose(model);
-    typeComposers[`${modelName}TC`] = TC;
-    
-    // Register in schema
-    if (!schemaComposer.has(modelName)) {
-      schemaComposer.add(TC);
-      ctx.logger?.debug(`[Module Composer] Added ${modelName} TypeComposer to schema`);
-    }
-    
-    // Register in registry if available
-    if (ctx.graphqlRegistry && ctx.graphqlRegistry.typeComposers) {
-      ctx.graphqlRegistry.typeComposers[`${modelName}TC`] = TC;
-      ctx.logger?.debug(`[Module Composer] Registered ${modelName}TC in graphql registry`);
-    }
-    
-    ctx.logger?.debug(`[Module Composer] Created TypeComposer: ${modelName}TC`);
   }
   
   return { ...ctx, typeComposers };
@@ -64,15 +95,40 @@ export const withTypeComposers = () => (ctx) => {
  * @returns {Function} - Higher-order function that takes context and returns updated context
  */
 export const withResolvers = (resolverCreator) => (ctx) => {
-  const resolvers = resolverCreator(ctx);
+  if (typeof resolverCreator !== 'function') {
+    ctx.logger?.warn('[Module Composer] No resolver creator provided or not a function');
+    return { ...ctx, resolvers: {} };
+  }
   
-  ctx.logger?.debug(`[Module Composer] Created resolvers: ${
-    Object.keys(resolvers.Query || {}).join(', ')
-  }, ${
-    Object.keys(resolvers.Mutation || {}).join(', ')
-  }`);
-  
-  return { ...ctx, resolvers };
+  try {
+    const resolvers = resolverCreator(ctx);
+    
+    // Log resolvers for debugging
+    console.log(`[Module Composer] Created resolvers with keys:`, Object.keys(resolvers));
+    if (resolvers.Query) {
+      console.log(`[Module Composer] Query resolvers:`, Object.keys(resolvers.Query));
+    }
+    if (resolvers.Mutation) {
+      console.log(`[Module Composer] Mutation resolvers:`, Object.keys(resolvers.Mutation));
+    }
+    
+    // Store resolvers in context
+    ctx.resolvers = resolvers;
+    
+    // Register resolvers in graphqlRegistry if available
+    if (ctx.graphqlRegistry && ctx.graphqlRegistry.resolvers && ctx.app && ctx.app.modules) {
+      const currentModule = ctx.app.modules.find(m => m.id === ctx.currentModuleId);
+      if (currentModule) {
+        ctx.graphqlRegistry.resolvers[currentModule.id] = resolvers;
+        console.log(`[Module Composer] Registered resolvers for module ${currentModule.id} in graphql registry`);
+      }
+    }
+    
+    return { ...ctx, resolvers };
+  } catch (error) {
+    ctx.logger?.error(`[Module Composer] Error creating resolvers: ${error.message}`);
+    return { ...ctx, resolvers: {} };
+  }
 };
 
 /**
@@ -81,9 +137,17 @@ export const withResolvers = (resolverCreator) => (ctx) => {
  * @returns {Function} - Higher-order function that takes context and returns updated context
  */
 export const withHooks = (hookApplier) => (ctx) => {
-  hookApplier(ctx);
+  if (typeof hookApplier !== 'function') {
+    ctx.logger?.warn('[Module Composer] No hook applier provided or not a function');
+    return ctx;
+  }
   
-  ctx.logger?.debug('[Module Composer] Applied hooks');
+  try {
+    hookApplier(ctx);
+    ctx.logger?.debug('[Module Composer] Applied hooks');
+  } catch (error) {
+    ctx.logger?.error(`[Module Composer] Error applying hooks: ${error.message}`);
+  }
   
   return ctx;
 };
@@ -94,9 +158,17 @@ export const withHooks = (hookApplier) => (ctx) => {
  * @returns {Function} - Higher-order function that takes context and returns updated context
  */
 export const withRelations = (relationEstablisher) => (ctx) => {
-  relationEstablisher(ctx, ctx.app?.modules || []);
+  if (typeof relationEstablisher !== 'function') {
+    ctx.logger?.warn('[Module Composer] No relation establisher provided or not a function');
+    return ctx;
+  }
   
-  ctx.logger?.debug('[Module Composer] Established relations');
+  try {
+    relationEstablisher(ctx, ctx.app?.modules || []);
+    ctx.logger?.debug('[Module Composer] Established relations');
+  } catch (error) {
+    ctx.logger?.error(`[Module Composer] Error establishing relations: ${error.message}`);
+  }
   
   return ctx;
 };
@@ -127,9 +199,17 @@ export const registerInApp = (moduleId) => (ctx) => {
  * @returns {Function} - Higher-order function that takes context and returns updated context
  */
 export const withInit = (initializer) => (ctx) => {
-  initializer(ctx);
+  if (typeof initializer !== 'function') {
+    ctx.logger?.warn('[Module Composer] No initializer provided or not a function');
+    return ctx;
+  }
   
-  ctx.logger?.debug('[Module Composer] Initialized module');
+  try {
+    initializer(ctx);
+    ctx.logger?.debug('[Module Composer] Initialized module');
+  } catch (error) {
+    ctx.logger?.error(`[Module Composer] Error initializing module: ${error.message}`);
+  }
   
   return ctx;
 }; 

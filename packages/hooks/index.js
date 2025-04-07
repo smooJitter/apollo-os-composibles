@@ -21,21 +21,25 @@ class LifecycleHookRegistry {
    */
   on(eventName, listener, options = {}) {
     if (typeof listener !== 'function') {
-      this.logger.error(`[LifecycleHooks] Attempted to register non-function listener for event: ${eventName}`);
+      this.logger.error(
+        `[LifecycleHooks] Attempted to register non-function listener for event: ${eventName}`
+      );
       return;
     }
     if (!this.hooks.has(eventName)) {
       this.hooks.set(eventName, []);
     }
     const listeners = this.hooks.get(eventName);
-    listeners.push({ 
-        fn: listener, 
-        priority: options.priority || 0, 
-        description: options.description || listener.name || 'anonymous' 
+    listeners.push({
+      fn: listener,
+      priority: options.priority || 0,
+      description: options.description || listener.name || 'anonymous',
     });
     // Sort listeners by priority (lower first)
     listeners.sort((a, b) => a.priority - b.priority);
-    this.logger.debug(`[LifecycleHooks] Registered listener for '${eventName}': ${options.description || listener.name}`);
+    this.logger.debug(
+      `[LifecycleHooks] Registered listener for '${eventName}': ${options.description || listener.name}`
+    );
   }
 
   /**
@@ -50,18 +54,25 @@ class LifecycleHookRegistry {
       return;
     }
 
-    this.logger.info(`[LifecycleHooks] Emitting event: ${eventName} (${listeners.length} listeners)`);
+    this.logger.info(
+      `[LifecycleHooks] Emitting event: ${eventName} (${listeners.length} listeners)`
+    );
     for (const listener of listeners) {
       try {
-        this.logger.debug(`[LifecycleHooks] Executing listener '${listener.description}' for event '${eventName}'`);
+        this.logger.debug(
+          `[LifecycleHooks] Executing listener '${listener.description}' for event '${eventName}'`
+        );
         await listener.fn(...args);
       } catch (err) {
-        this.logger.error(`[LifecycleHooks] Error executing listener '${listener.description}' for event ${eventName}:`, err);
+        this.logger.error(
+          `[LifecycleHooks] Error executing listener '${listener.description}' for event ${eventName}:`,
+          err
+        );
         // Optionally decide if an error in one listener should stop others
         // throw err; // Uncomment to stop execution on error
       }
     }
-     this.logger.info(`[LifecycleHooks] Finished emitting event: ${eventName}`);
+    this.logger.info(`[LifecycleHooks] Finished emitting event: ${eventName}`);
   }
 
   /**
@@ -74,9 +85,12 @@ class LifecycleHookRegistry {
     if (!listeners) return;
 
     const initialLength = listeners.length;
-    this.hooks.set(eventName, listeners.filter(listener => listener.fn !== listenerToRemove));
-    if(listeners.length < initialLength) {
-        this.logger.debug(`[LifecycleHooks] Removed listener for event: ${eventName}`);
+    this.hooks.set(
+      eventName,
+      listeners.filter((listener) => listener.fn !== listenerToRemove)
+    );
+    if (listeners.length < initialLength) {
+      this.logger.debug(`[LifecycleHooks] Removed listener for event: ${eventName}`);
     }
   }
 
@@ -87,8 +101,8 @@ class LifecycleHookRegistry {
   removeAllListeners(eventName) {
     if (eventName) {
       if (this.hooks.has(eventName)) {
-          this.hooks.delete(eventName);
-          this.logger.debug(`[LifecycleHooks] Removed all listeners for event: ${eventName}`);
+        this.hooks.delete(eventName);
+        this.logger.debug(`[LifecycleHooks] Removed all listeners for event: ${eventName}`);
       }
     } else {
       this.hooks.clear();
@@ -106,11 +120,11 @@ export { LifecycleHookRegistry };
 
 // Example predefined hook names (optional)
 export const HOOK_EVENTS = {
-    APP_START: 'app:start',
-    APP_READY: 'app:ready', // After modules loaded and postLoad complete
-    APP_SHUTDOWN_START: 'app:shutdown:start',
-    APP_SHUTDOWN_COMPLETE: 'app:shutdown:complete',
-    DB_CONNECTED: 'db:connected',
-    DB_DISCONNECTED: 'db:disconnected',
-    // Add more specific events
+  APP_START: 'app:start',
+  APP_READY: 'app:ready', // After modules loaded and postLoad complete
+  APP_SHUTDOWN_START: 'app:shutdown:start',
+  APP_SHUTDOWN_COMPLETE: 'app:shutdown:complete',
+  DB_CONNECTED: 'db:connected',
+  DB_DISCONNECTED: 'db:disconnected',
+  // Add more specific events
 };

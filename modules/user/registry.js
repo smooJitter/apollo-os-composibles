@@ -5,11 +5,15 @@ import { schemaComposer } from 'graphql-compose';
 import { composeMongoose } from 'graphql-compose-mongoose';
 import * as R from 'ramda';
 import { userSchemas } from './schemas.js';
+import { GraphQLJSON } from 'graphql-compose';
 
-// Create a private store for type composers
-const store = {
-  typeComposers: {},
-  initialized: false
+// Initialize registry state
+let initialized = false;
+const typeComposers = {
+  UserTC: null,
+  AuthTokenTC: null,
+  AuthPayloadTC: null,
+  UserHealthStatusTC: null
 };
 
 // Pure functions for registry operations
@@ -20,18 +24,18 @@ export const register = R.curry((name, tc) => {
   }
   
   return R.tap(
-    () => { store.typeComposers[name] = tc; }, 
+    () => { typeComposers[name] = tc; }, 
     tc
   );
 });
 
-export const get = R.propOr(null, R.__, store.typeComposers);
+export const get = R.propOr(null, R.__, typeComposers);
 
-export const getAll = () => store.typeComposers;
+export const getAll = () => typeComposers;
 
-export const setInitialized = R.tap(value => { store.initialized = value; });
+export const setInitialized = R.tap(value => { initialized = value; });
 
-export const isInitialized = () => store.initialized;
+export const isInitialized = () => initialized;
 
 // Ensure root types exist in schema
 const ensureRootTypes = R.tap(() => {
@@ -45,30 +49,114 @@ const ensureRootTypes = R.tap(() => {
   });
 });
 
-// Create and register type composers
-const createAndRegisterTypes = () => {
-  // Create TypeComposer for User model
-  const UserTC = composeMongoose(userSchemas.User, {
-    removeFields: ['password'], // Don't expose password in GraphQL
-    inputType: {
-      removeFields: ['createdAt', 'updatedAt']
+/**
+ * Initialize TypeComposers for the User module
+ */
+export const initializeTypeComposers = () => {
+  if (initialized) {
+    console.log('[User TypeComposers] Already initialized');
+    return;
+  }
+
+  console.log('[User TypeComposers] Initializing user module type composers');
+  
+  // Add JSON scalar if not defined
+  if (!schemaComposer.has('JSON')) {
+    schemaComposer.add(GraphQLJSON, 'JSON');
+  }
+  
+  // Define User TypeComposer
+  const UserTC = schemaComposer.createObjectTC({
+    name: 'User',
+    fields: {
+      id: 'ID!',
+      username: 'String!',
+      email: 'String!',
+      firstName: 'String',
+      lastName: 'String',
+      fullName: {
+        type: 'String',
+        resolve: source => `${source.firstName || ''} ${source.lastName || ''}`.trim() || null
+      },
+      role: 'String!',
+      isActive: 'Boolean!',
+      createdAt: 'Date!',
+      updatedAt: 'Date'
     }
   });
   
-  // Create AuthPayload TypeComposer
+  // Define AuthToken TypeComposer  
+  const AuthTokenTC = schemaComposer.createObjectTC({
+    name: 'AuthToken',
+    fields: {
+      token: 'String!',
+      expiresAt: 'Date'
+    }
+  });
+  
+  // Define AuthPayload TypeComposer  
   const AuthPayloadTC = schemaComposer.createObjectTC({
     name: 'AuthPayload',
     fields: {
       user: UserTC,
-      token: 'String!'
+      token: AuthTokenTC
     }
   });
   
-  // Register type composers
-  register('UserTC', UserTC);
-  register('AuthPayloadTC', AuthPayloadTC);
+  // Define UserHealthStatus TypeComposer
+  const UserHealthStatusTC = schemaComposer.createObjectTC({
+    name: 'UserHealthStatus',
+    fields: {
+      status: 'String!',
+      message: 'String!',
+      timestamp: 'String!'
+    }
+  });
   
-  return { UserTC, AuthPayloadTC };
+  // Store in registry
+  typeComposers.UserTC = UserTC;
+  typeComposers.AuthTokenTC = AuthTokenTC;
+  typeComposers.AuthPayloadTC = AuthPayloadTC;
+  typeComposers.UserHealthStatusTC = UserHealthStatusTC;
+  
+  initialized = true;
+  console.log('[User TypeComposers] Initialization complete');
+};
+
+/**
+ * Get UserTC from registry
+ * @returns {Object} UserTC
+ */
+export const getUserTC = () => {
+  if (!initialized) initializeTypeComposers();
+  return typeComposers.UserTC;
+};
+
+/**
+ * Get AuthTokenTC from registry
+ * @returns {Object} AuthTokenTC
+ */
+export const getAuthTokenTC = () => {
+  if (!initialized) initializeTypeComposers();
+  return typeComposers.AuthTokenTC;
+};
+
+/**
+ * Get AuthPayloadTC from registry
+ * @returns {Object} AuthPayloadTC
+ */
+export const getAuthPayloadTC = () => {
+  if (!initialized) initializeTypeComposers();
+  return typeComposers.AuthPayloadTC;
+};
+
+/**
+ * Get UserHealthStatusTC from registry
+ * @returns {Object} UserHealthStatusTC
+ */
+export const getUserHealthStatusTC = () => {
+  if (!initialized) initializeTypeComposers();
+  return typeComposers.UserHealthStatusTC;
 };
 
 // Log registration results
@@ -82,7 +170,7 @@ const logRegistration = R.tap(() => {
 });
 
 // Initialize TypeComposers for User models
-export const initializeTypeComposers = R.once(() => {
+export const initializeTypeComposersForUserModels = R.once(() => {
   if (isInitialized()) {
     console.log('[TypeComposer Registry] Already initialized');
     return getAll();
@@ -93,7 +181,7 @@ export const initializeTypeComposers = R.once(() => {
   try {
     R.pipe(
       ensureRootTypes,
-      createAndRegisterTypes,
+      initializeTypeComposers,
       logRegistration,
       () => setInitialized(true)
     )();
@@ -104,10 +192,6 @@ export const initializeTypeComposers = R.once(() => {
     throw error;
   }
 });
-
-// Convenience exports for common type composers
-export const getUserTC = () => get('UserTC');
-export const getAuthPayloadTC = () => get('AuthPayloadTC');
 
 // Export all registry functions as a unified API
 export const TCRegistry = {

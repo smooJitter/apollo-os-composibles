@@ -18,27 +18,33 @@ export class App {
    */
   load(moduleFn) {
     if (typeof moduleFn !== 'function') {
-      throw new Error(`[App] Attempted to load a non-function module. Ensure modules export a default function.`);
+      throw new Error(
+        `[App] Attempted to load a non-function module. Ensure modules export a default function.`
+      );
     }
 
     const mod = moduleFn(this.ctx);
 
     // Basic validation of the returned module object
     if (!mod?.id || typeof mod.id !== 'string') {
-      throw new Error(`[App] Module loaded from function ${moduleFn.name || '(anonymous)'} must return an object with a valid string 'id'. Received: ${JSON.stringify(mod)}`);
+      throw new Error(
+        `[App] Module loaded from function ${moduleFn.name || '(anonymous)'} must return an object with a valid string 'id'. Received: ${JSON.stringify(mod)}`
+      );
     }
     if (typeof mod.onLoad !== 'function') {
-       this.ctx.logger?.warn(`[App] Module '${mod.id}' does not have an onLoad function. Assets should be registered here.`);
-       // Proceeding, but assets might not be registered correctly if module expects implicit registration
+      this.ctx.logger?.warn(
+        `[App] Module '${mod.id}' does not have an onLoad function. Assets should be registered here.`
+      );
+      // Proceeding, but assets might not be registered correctly if module expects implicit registration
     }
 
     // Call onLoad if it exists - this is where modules register their assets
     try {
-        mod.onLoad?.();
-        this.ctx.logger?.debug(`[App] Executed onLoad for module: ${mod.id}`);
-    } catch(err) {
-        this.ctx.logger?.error(`[App] Error during onLoad for module ${mod.id}:`, err);
-        throw err; // Re-throw error during loading
+      mod.onLoad?.();
+      this.ctx.logger?.debug(`[App] Executed onLoad for module: ${mod.id}`);
+    } catch (err) {
+      this.ctx.logger?.error(`[App] Error during onLoad for module ${mod.id}:`, err);
+      throw err; // Re-throw error during loading
     }
 
     // Store the module definition object (contains id, meta, lifecycle methods, etc.)
@@ -89,22 +95,26 @@ export class App {
   register(modAssets) {
     const { id, ...rest } = modAssets;
     if (!id || typeof id !== 'string') {
-      throw new Error(`[App] Cannot register module assets without a valid string 'id'. Received: ${JSON.stringify(modAssets)}`);
+      throw new Error(
+        `[App] Cannot register module assets without a valid string 'id'. Received: ${JSON.stringify(modAssets)}`
+      );
     }
 
     const existing = this.registry[id] ?? { id }; // Initialize if not exists
-    
+
     // Deep merge assets: models, typeComposers, resolvers, services, actions, validators
     for (const key in rest) {
-        if (typeof rest[key] === 'object' && rest[key] !== null && !Array.isArray(rest[key])) {
-            existing[key] = { ...(existing[key] || {}), ...rest[key] };
-        } else {
-            existing[key] = rest[key]; // Overwrite non-object properties or arrays
-        }
+      if (typeof rest[key] === 'object' && rest[key] !== null && !Array.isArray(rest[key])) {
+        existing[key] = { ...(existing[key] || {}), ...rest[key] };
+      } else {
+        existing[key] = rest[key]; // Overwrite non-object properties or arrays
+      }
     }
-    
+
     this.registry[id] = existing;
-    this.ctx.logger?.debug(`[App] Registered assets for module: ${id}. Keys: ${Object.keys(rest).join(', ')}`);
+    this.ctx.logger?.debug(
+      `[App] Registered assets for module: ${id}. Keys: ${Object.keys(rest).join(', ')}`
+    );
   }
 
   /**
@@ -119,7 +129,7 @@ export class App {
    * @returns {object | undefined} The registered assets or undefined if not found.
    */
   getModule = (id) => this.registry[id];
-  
+
   /**
    * Retrieves all registered assets from all modules.
    * @returns {Array<object>} Array of registered module assets.
@@ -137,44 +147,49 @@ export class App {
    * Retrieves all registered Mongoose models from all modules.
    * @returns {object} An object mapping moduleID -> { modelName: Model }
    */
-  getModels = () => this.getAllRegisteredAssets().reduce((acc, mod) => {
-    if (mod.models) acc[mod.id] = mod.models;
-    return acc;
-  }, {});
+  getModels = () =>
+    this.getAllRegisteredAssets().reduce((acc, mod) => {
+      if (mod.models) acc[mod.id] = mod.models;
+      return acc;
+    }, {});
 
   /**
    * Retrieves all registered TypeComposers from all modules.
    * @returns {object} An object mapping moduleID -> { tcName: TypeComposer }
    */
-  getTypeComposers = () => this.getAllRegisteredAssets().reduce((acc, mod) => {
-    if (mod.typeComposers) acc[mod.id] = mod.typeComposers;
-    return acc;
-  }, {});
+  getTypeComposers = () =>
+    this.getAllRegisteredAssets().reduce((acc, mod) => {
+      if (mod.typeComposers) acc[mod.id] = mod.typeComposers;
+      return acc;
+    }, {});
 
   /**
    * Retrieves all registered services from all modules.
    * @returns {object} An object mapping moduleID -> { serviceName: Service }
    */
-  getServices = () => this.getAllRegisteredAssets().reduce((acc, mod) => {
+  getServices = () =>
+    this.getAllRegisteredAssets().reduce((acc, mod) => {
       if (mod.services) acc[mod.id] = mod.services;
       return acc;
-  }, {});
-  
+    }, {});
+
   /**
    * Retrieves all registered actions from all modules.
    * @returns {object} An object mapping moduleID -> { actionName: Action }
    */
-  getActions = () => this.getAllRegisteredAssets().reduce((acc, mod) => {
+  getActions = () =>
+    this.getAllRegisteredAssets().reduce((acc, mod) => {
       if (mod.actions) acc[mod.id] = mod.actions;
       return acc;
-  }, {});
+    }, {});
 
   /**
    * Retrieves all registered validators from all modules.
    * @returns {object} An object mapping moduleID -> { validatorName: Validator }
    */
-  getValidators = () => this.getAllRegisteredAssets().reduce((acc, mod) => {
+  getValidators = () =>
+    this.getAllRegisteredAssets().reduce((acc, mod) => {
       if (mod.validators) acc[mod.id] = mod.validators;
       return acc;
-  }, {});
+    }, {});
 }

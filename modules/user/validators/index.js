@@ -13,6 +13,8 @@ import {
   validateRegistrationInputAsync as zodRegistrationAsyncValidator
 } from '../lib/validators.js';
 
+import { validateLogin, validateRegistration } from './auth.js';
+
 // Re-export schemas
 export {
   RegisterInputSchema,
@@ -85,4 +87,10 @@ export const validateRegistrationInputAsync = (input, options) => {
       // Already in legacy format from the original function
       return result;
     });
+};
+
+// Export all validators
+export {
+  validateLogin,
+  validateRegistration
 };

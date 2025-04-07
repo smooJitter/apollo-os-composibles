@@ -22,4 +22,4 @@ export function timestampsPlugin(schema) {
     this.set({ updatedAt: new Date() });
     next();
   });
-} 
+}

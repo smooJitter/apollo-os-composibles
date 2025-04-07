@@ -1,11 +1,11 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { rbacPlugin } from '../../../config/shared-mongoose/plugins/rbac.js';
 
 // Note: ctx is passed in but not strictly needed for this basic schema
 // unless using shared plugins or enums directly injected.
 // We get enums and plugins via the passed-in ctx.
 export default function createUserModel(ctx) {
-  const { ROLES, ROLE_VALUES } = ctx.enums.roles; // Get roles from context
   const { timestamps } = ctx.sharedMongoose.plugins; // Get shared timestamp plugin
 
   const UserSchema = new mongoose.Schema(
@@ -29,15 +29,6 @@ export default function createUserModel(ctx) {
         minlength: [8, 'Password must be at least 8 characters long.'],
         select: false, // Exclude password field by default when querying users
       },
-      role: {
-        type: String,
-        enum: {
-          values: ROLE_VALUES,
-          message: 'Invalid role: {VALUE}',
-        },
-        default: ROLES.USER,
-        required: true,
-      },
       active: {
         type: Boolean,
         default: true,
@@ -54,6 +45,13 @@ export default function createUserModel(ctx) {
 
   // --- Plugins ---
   UserSchema.plugin(timestamps); // Apply the shared timestamps plugin
+  
+  // Apply RBAC plugin - use single role for backward compatibility with existing code
+  UserSchema.plugin(rbacPlugin, { 
+    singleRole: true, 
+    roleRefPath: 'role',
+    populateRoles: true
+  });
 
   // --- Hooks (Middleware) ---
 
@@ -79,6 +77,17 @@ export default function createUserModel(ctx) {
     // 'this.password' refers to the hashed password in the document
     // Need to select it explicitly if it was excluded by default
     return await bcrypt.compare(candidatePassword, this.password);
+  };
+  
+  /**
+   * Helper method to check if user has a specific role by name
+   * @param {String} roleName - Role name to check
+   * @returns {Boolean} - Whether user has the role
+   */
+  UserSchema.methods.hasRole = async function(roleName) {
+    await this.populate('role');
+    if (!this.role) return false;
+    return this.role.name === roleName;
   };
 
   // --- Statics ---

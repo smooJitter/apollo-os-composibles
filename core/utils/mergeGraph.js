@@ -14,9 +14,9 @@ export function mergeGraphSchemas(schemas = []) {
   }
   try {
     // Filter out null/undefined schemas
-    const validSchemas = schemas.filter(s => s);
+    const validSchemas = schemas.filter((s) => s);
     if (validSchemas.length === 0) {
-        throw new Error('[mergeGraphSchemas] No valid schemas remaining after filtering.');
+      throw new Error('[mergeGraphSchemas] No valid schemas remaining after filtering.');
     }
     return mergeSchemas({ schemas: validSchemas });
   } catch (err) {

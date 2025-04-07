@@ -8,6 +8,6 @@
     ".": "./index.js"
   },
   "dependencies": {
-    "@apolloos/error-utils": "0.1.0" 
+    "@apolloos/error-utils": "0.1.0"
   }
-} 
+}

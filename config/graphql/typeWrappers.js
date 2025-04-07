@@ -5,12 +5,12 @@ import { GraphQLDateTime } from 'graphql-scalars';
 export const typeWrappers = {
   createdAt: {
     type: 'DateTime',
-    description: 'Time of creation'
+    description: 'Time of creation',
   },
   updatedAt: {
     type: 'DateTime',
-    description: 'Last update time'
-  }
+    description: 'Last update time',
+  },
 };
 
 /**
