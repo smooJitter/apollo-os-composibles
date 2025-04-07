@@ -10,6 +10,24 @@ export const initResolvers = () => {
   // Get the type composers
   const HabitTC = getHabitTC();
   
+  // Add a field for weighted tags
+  HabitTC.addFields({
+    weightedTags: {
+      type: 'JSON',
+      description: 'Tagged categories with weights for this habit',
+      resolve: (source) => source.weightedTags || []
+    }
+  });
+  
+  // Add a field for timeline events
+  HabitTC.addFields({
+    timeline: {
+      type: 'JSON',
+      description: 'Timeline of events related to this habit',
+      resolve: (source) => source.timeline || []
+    }
+  });
+  
   // Define queries
   const queries = {
     // Get a single habit by ID
@@ -31,10 +49,12 @@ export const initResolvers = () => {
         userId: 'MongoID!',
         active: 'Boolean',
         category: 'String',
-        frequency: 'String'
+        frequency: 'String',
+        tag: 'String',
+        tagType: 'String'
       },
       resolve: async (source, args, context) => {
-        const { userId, active, category, frequency } = args;
+        const { userId, active, category, frequency, tag, tagType } = args;
         const { models, logger } = context;
         
         try {
@@ -64,6 +84,19 @@ export const initResolvers = () => {
           
           if (frequency) {
             query.frequency = frequency;
+          }
+          
+          // Filter by weighted tag if specified
+          if (tag && tagType) {
+            query['weightedTags'] = {
+              $elemMatch: {
+                name: tag,
+                type: tagType
+              }
+            };
+          } else if (tag) {
+            // Just filter by tag name
+            query['weightedTags.name'] = tag;
           }
           
           // Fetch habits
@@ -168,7 +201,8 @@ export const initResolvers = () => {
             },
             byCategory: {},
             completionRate: 0,
-            historicalData: []
+            historicalData: [],
+            weightedTags: {}
           };
           
           // Group by category
@@ -178,6 +212,29 @@ export const initResolvers = () => {
               stats.byCategory[category] = 0;
             }
             stats.byCategory[category]++;
+            
+            // Process weighted tags
+            if (habit.weightedTags && habit.weightedTags.length > 0) {
+              habit.weightedTags.forEach(tag => {
+                if (!stats.weightedTags[tag.type]) {
+                  stats.weightedTags[tag.type] = {};
+                }
+                
+                if (!stats.weightedTags[tag.type][tag.name]) {
+                  stats.weightedTags[tag.type][tag.name] = {
+                    count: 0,
+                    avgWeight: 0,
+                    totalWeight: 0
+                  };
+                }
+                
+                stats.weightedTags[tag.type][tag.name].count++;
+                stats.weightedTags[tag.type][tag.name].totalWeight += tag.weight;
+                stats.weightedTags[tag.type][tag.name].avgWeight = 
+                  stats.weightedTags[tag.type][tag.name].totalWeight / 
+                  stats.weightedTags[tag.type][tag.name].count;
+              });
+            }
           });
           
           // Calculate completion rate and historical data
@@ -249,11 +306,12 @@ export const initResolvers = () => {
       type: HabitTC,
       args: {
         userId: 'MongoID!',
-        input: getHabitInputTC()
+        input: getHabitInputTC(),
+        tags: 'JSON' // Format: [{name, type, weight}]
       },
       resolve: async (source, args, context) => {
-        const { userId, input } = args;
-        const { models, logger } = context;
+        const { userId, input, tags } = args;
+        const { models, logger, currentUser } = context;
         
         try {
           // Convert string ID to ObjectId
@@ -274,6 +332,18 @@ export const initResolvers = () => {
             userId: userObjectId
           });
           
+          // Add timeline event for creation
+          habit.logEvent('created', currentUser?.id || userObjectId);
+          
+          // Add weighted tags if provided
+          if (tags && Array.isArray(tags)) {
+            tags.forEach(tag => {
+              if (tag.name && tag.type) {
+                habit.addTag(tag.name, tag.type, tag.weight || 1.0);
+              }
+            });
+          }
+          
           await habit.save();
           logger?.debug(`[Habit] Created habit for user ${userId}: "${input.title}"`);
           
@@ -290,10 +360,11 @@ export const initResolvers = () => {
       type: HabitTC,
       args: {
         id: 'MongoID!',
-        input: getHabitInputTC()
+        input: getHabitInputTC(),
+        tags: 'JSON' // Format: [{name, type, weight}]
       },
       resolve: async (source, args, context) => {
-        const { id, input } = args;
+        const { id, input, tags } = args;
         const { models, logger, currentUser } = context;
         
         try {
@@ -324,6 +395,18 @@ export const initResolvers = () => {
               habit[key] = input[key];
             }
           });
+          
+          // Log the update event
+          habit.logEvent('updated', currentUser?.id || null);
+          
+          // Update weighted tags if provided
+          if (tags && Array.isArray(tags)) {
+            tags.forEach(tag => {
+              if (tag.name && tag.type) {
+                habit.addTag(tag.name, tag.type, tag.weight || 1.0);
+              }
+            });
+          }
           
           // Save changes
           await habit.save();
@@ -383,6 +466,9 @@ export const initResolvers = () => {
             return entryDate.getTime() === today.getTime();
           });
           
+          const wasCompletedBefore = habit.status.completedToday;
+          const newStreak = habit.status.streak + (wasCompletedBefore ? 0 : 1);
+          
           // If there's already an entry for today, update it
           if (todayEntry) {
             todayEntry.completed = true;
@@ -405,6 +491,15 @@ export const initResolvers = () => {
             habit.currentValue = value;
           } else {
             habit.currentValue += 1; // Increment by default
+          }
+          
+          // Log completion event
+          habit.logEvent('completed', currentUser?.id || null, notes);
+          
+          // Check for streak milestones (5, 10, 25, 50, 100, etc.)
+          const streakMilestones = [5, 10, 25, 50, 100, 150, 200, 365];
+          if (!wasCompletedBefore && streakMilestones.includes(newStreak)) {
+            habit.logEvent('streak_milestone', currentUser?.id || null, `Reached ${newStreak} day streak!`);
           }
           
           // Save changes
@@ -481,6 +576,7 @@ export const initResolvers = () => {
             
             // If there's no completion for yesterday and it was scheduled, reset streak
             if (!yesterdayCompleted) {
+              const oldStreak = habit.status.streak;
               habit.status.streak = 0;
               
               // Add missed entry
@@ -489,6 +585,14 @@ export const initResolvers = () => {
                 completed: false,
                 notes: 'Missed'
               });
+              
+              // Log streak broken event if streak was at least 3
+              if (oldStreak >= 3) {
+                habit.logEvent('streak_broken', null, `Streak of ${oldStreak} days broken`);
+              }
+              
+              // Log missed event
+              habit.logEvent('missed', null, `Missed scheduled habit`);
             }
             
             await habit.save();
@@ -532,6 +636,13 @@ export const initResolvers = () => {
           // Toggle active status
           habit.status.active = !habit.status.active;
           
+          // Log the appropriate event
+          if (habit.status.active) {
+            habit.logEvent('resumed', currentUser?.id || null);
+          } else {
+            habit.logEvent('paused', currentUser?.id || null);
+          }
+          
           // Save changes
           await habit.save();
           logger?.debug(`[Habit] Toggled active status for habit ${id} to ${habit.status.active}`);
@@ -570,6 +681,10 @@ export const initResolvers = () => {
             throw new Error('Not authorized to delete this habit');
           }
           
+          // Log deletion event before deleting
+          habit.logEvent('deleted', currentUser?.id || null);
+          await habit.save(); // Save the deletion event
+          
           // Delete habit
           await HabitModel.deleteOne({ _id: id });
           logger?.debug(`[Habit] Deleted habit ${id}`);
@@ -577,6 +692,100 @@ export const initResolvers = () => {
           return habit;
         } catch (error) {
           logger?.error(`[Habit Resolver] Error deleting habit: ${error.message}`);
+          throw error;
+        }
+      }
+    },
+    
+    // Add tag to habit
+    habitAddTag: {
+      type: HabitTC,
+      args: {
+        id: 'MongoID!',
+        name: 'String!',
+        type: 'String!',
+        weight: 'Float'
+      },
+      resolve: async (source, args, context) => {
+        const { id, name, type, weight = 5 } = args; // Default weight 5 (mid-range of 0-10)
+        const { models, logger, currentUser } = context;
+        
+        try {
+          // Use the Habit model from context or import directly
+          const HabitModel = models?.Habit || mongoose.model('Habit');
+          
+          // Find habit
+          const habit = await HabitModel.findById(id);
+          
+          if (!habit) {
+            throw new Error(`Habit not found: ${id}`);
+          }
+          
+          // Security check
+          if (currentUser && habit.userId.toString() !== currentUser.id.toString()) {
+            throw new Error('Not authorized to modify this habit');
+          }
+          
+          // Add tag with weight
+          habit.addTag(name, type, weight);
+          
+          // Log tag addition
+          habit.logEvent('updated', currentUser?.id || null, `Added tag: ${type}:${name}`);
+          
+          // Save changes
+          await habit.save();
+          logger?.debug(`[Habit] Added tag ${type}:${name} to habit ${id}`);
+          
+          return habit;
+        } catch (error) {
+          logger?.error(`[Habit Resolver] Error adding tag: ${error.message}`);
+          throw error;
+        }
+      }
+    },
+    
+    // Remove tag from habit
+    habitRemoveTag: {
+      type: HabitTC,
+      args: {
+        id: 'MongoID!',
+        name: 'String!',
+        type: 'String'
+      },
+      resolve: async (source, args, context) => {
+        const { id, name, type } = args;
+        const { models, logger, currentUser } = context;
+        
+        try {
+          // Use the Habit model from context or import directly
+          const HabitModel = models?.Habit || mongoose.model('Habit');
+          
+          // Find habit
+          const habit = await HabitModel.findById(id);
+          
+          if (!habit) {
+            throw new Error(`Habit not found: ${id}`);
+          }
+          
+          // Security check
+          if (currentUser && habit.userId.toString() !== currentUser.id.toString()) {
+            throw new Error('Not authorized to modify this habit');
+          }
+          
+          // Remove tag
+          habit.removeTag(name, type);
+          
+          // Log tag removal
+          habit.logEvent('updated', currentUser?.id || null, 
+            `Removed tag: ${type ? type + ':' : ''}${name}`);
+          
+          // Save changes
+          await habit.save();
+          logger?.debug(`[Habit] Removed tag ${name} from habit ${id}`);
+          
+          return habit;
+        } catch (error) {
+          logger?.error(`[Habit Resolver] Error removing tag: ${error.message}`);
           throw error;
         }
       }

@@ -5,7 +5,17 @@ import { initResolvers } from './resolvers.js';
 import habitHooks from './hooks/habitHooks.js';
 import habitRelations from './relations/habitRelations.js';
 import { habitInit } from './init.js';
-import { createHabit, markHabitCompleted, getHabitStats, getHabitsDueToday } from './actions/index.js';
+import { 
+  createHabit, 
+  markHabitCompleted, 
+  getHabitStats, 
+  getHabitsDueToday,
+  addHabitTag,
+  removeHabitTag,
+  getHabitsByTag,
+  getHabitTimeline,
+  toggleHabitActiveStatus
+} from './actions/index.js';
 
 // Import functional composers
 import {
@@ -28,7 +38,12 @@ const actions = {
   createHabit,
   markHabitCompleted,
   getHabitStats,
-  getHabitsDueToday
+  getHabitsDueToday,
+  addHabitTag,
+  removeHabitTag,
+  getHabitsByTag,
+  getHabitTimeline,
+  toggleHabitActiveStatus
 };
 
 /**

@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import { timestampsPlugin } from '../../config/shared-mongoose/plugins/timestamps.js';
+import { timetrackablePlugin } from '../../config/shared-mongoose/plugins/timetrackable.js';
+import { taggableFlexWeightedPlugin } from '../../config/shared-mongoose/plugins/taggableFlexWeighted.js';
 
 const { Schema } = mongoose;
 
@@ -112,6 +114,16 @@ const habitSchema = new Schema({
 
 // Apply plugins
 habitSchema.plugin(timestampsPlugin);
+habitSchema.plugin(timetrackablePlugin, {
+  allowedEvents: ['created', 'updated', 'deleted', 'completed', 'missed', 'paused', 'resumed', 'streak_broken', 'streak_milestone']
+});
+
+// Apply taggable plugin with advanced weighting for smart habit categorization
+habitSchema.plugin(taggableFlexWeightedPlugin, {
+  field: 'weightedTags',
+  allowedTypes: ['category', 'difficulty', 'motivation', 'goal', 'timeframe'],
+  weightRange: { min: 0, max: 10 } // Use 0-10 scale for more intuitive weighting
+});
 
 // Create Model
 export const Habit = mongoose.model('Habit', habitSchema);

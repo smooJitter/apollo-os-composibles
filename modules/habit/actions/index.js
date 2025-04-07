@@ -10,10 +10,19 @@ import mongoose from 'mongoose';
  * @param {string} [params.frequency] - Frequency (Daily, Weekly, Monthly)
  * @param {Array<number>} [params.daysOfWeek] - Days of week to perform the habit
  * @param {Object} [params.metadata] - Optional metadata
+ * @param {Array} [params.tags] - Optional weighted tags [{name, type, weight}]
  * @returns {Promise<Object>} The created habit
  */
 export async function createHabit(ctx, params) {
-  const { userId, title, description = '', frequency = 'Daily', daysOfWeek = [0, 1, 2, 3, 4, 5, 6], metadata = {} } = params;
+  const { 
+    userId, 
+    title, 
+    description = '', 
+    frequency = 'Daily', 
+    daysOfWeek = [0, 1, 2, 3, 4, 5, 6], 
+    metadata = {},
+    tags = []
+  } = params;
   const { models, logger } = ctx;
   
   try {
@@ -40,6 +49,18 @@ export async function createHabit(ctx, params) {
       }
     });
     
+    // Add timeline event
+    habit.logEvent('created', userId);
+    
+    // Add weighted tags if provided
+    if (tags && Array.isArray(tags)) {
+      tags.forEach(tag => {
+        if (tag.name && tag.type) {
+          habit.addTag(tag.name, tag.type, tag.weight || 5.0); // Default mid-range weight
+        }
+      });
+    }
+    
     // Save to database
     await habit.save();
     logger?.debug(`Created habit "${title}" for user ${userId}`);
@@ -58,10 +79,11 @@ export async function createHabit(ctx, params) {
  * @param {string} params.habitId - The habit ID
  * @param {string} [params.notes] - Optional notes about completion
  * @param {number} [params.value] - Value to record (for habits tracking values)
+ * @param {string} [params.userId] - User ID completing the habit
  * @returns {Promise<Object>} The updated habit
  */
 export async function markHabitCompleted(ctx, params) {
-  const { habitId, notes = '', value } = params;
+  const { habitId, notes = '', value, userId } = params;
   const { models, logger } = ctx;
   
   try {
@@ -93,6 +115,9 @@ export async function markHabitCompleted(ctx, params) {
       return entryDate.getTime() === today.getTime();
     });
     
+    const wasCompletedBefore = habit.status.completedToday;
+    const newStreak = habit.status.streak + (wasCompletedBefore ? 0 : 1);
+    
     // If there's already an entry for today, update it
     if (todayEntry) {
       todayEntry.completed = true;
@@ -115,6 +140,15 @@ export async function markHabitCompleted(ctx, params) {
       habit.currentValue = value;
     } else {
       habit.currentValue += 1; // Increment by default
+    }
+    
+    // Log completion event
+    habit.logEvent('completed', userId, notes);
+    
+    // Check for streak milestones (5, 10, 25, 50, 100, etc.)
+    const streakMilestones = [5, 10, 25, 50, 100, 150, 200, 365];
+    if (!wasCompletedBefore && streakMilestones.includes(newStreak)) {
+      habit.logEvent('streak_milestone', userId, `Reached ${newStreak} day streak!`);
     }
     
     // Save changes
@@ -166,8 +200,31 @@ export async function getHabitStats(ctx, params) {
       },
       byCategory: {},
       completionRate: 0,
-      historicalData: []
+      historicalData: [],
+      weightedTags: {},
+      recentActivity: []
     };
+    
+    // Process timeline events for recent activity
+    habits.forEach(habit => {
+      if (habit.timeline && habit.timeline.length > 0) {
+        habit.timeline.slice(-10).forEach(event => {
+          stats.recentActivity.push({
+            habitId: habit._id,
+            habitTitle: habit.title,
+            event: event.event,
+            timestamp: event.timestamp,
+            note: event.note
+          });
+        });
+      }
+    });
+    
+    // Sort recent activity by timestamp (most recent first)
+    stats.recentActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Limit to 20 most recent events
+    stats.recentActivity = stats.recentActivity.slice(0, 20);
     
     // Group by category
     habits.forEach(habit => {
@@ -176,6 +233,29 @@ export async function getHabitStats(ctx, params) {
         stats.byCategory[category] = 0;
       }
       stats.byCategory[category]++;
+      
+      // Process weighted tags
+      if (habit.weightedTags && habit.weightedTags.length > 0) {
+        habit.weightedTags.forEach(tag => {
+          if (!stats.weightedTags[tag.type]) {
+            stats.weightedTags[tag.type] = {};
+          }
+          
+          if (!stats.weightedTags[tag.type][tag.name]) {
+            stats.weightedTags[tag.type][tag.name] = {
+              count: 0,
+              avgWeight: 0,
+              totalWeight: 0
+            };
+          }
+          
+          stats.weightedTags[tag.type][tag.name].count++;
+          stats.weightedTags[tag.type][tag.name].totalWeight += tag.weight;
+          stats.weightedTags[tag.type][tag.name].avgWeight = 
+            stats.weightedTags[tag.type][tag.name].totalWeight / 
+            stats.weightedTags[tag.type][tag.name].count;
+        });
+      }
     });
     
     // Calculate completion rate and historical data
@@ -276,9 +356,230 @@ export async function getHabitsDueToday(ctx, params) {
   }
 }
 
+/**
+ * Add a tag to a habit
+ * @param {Object} ctx - Application context
+ * @param {Object} params - Function parameters
+ * @param {string} params.habitId - The habit ID
+ * @param {string} params.name - Tag name
+ * @param {string} params.type - Tag type
+ * @param {number} [params.weight] - Tag weight
+ * @param {string} [params.userId] - User ID making the change
+ * @returns {Promise<Object>} The updated habit
+ */
+export async function addHabitTag(ctx, params) {
+  const { habitId, name, type, weight = 5, userId } = params;
+  const { models, logger } = ctx;
+  
+  try {
+    // Validate inputs
+    if (!habitId) throw new Error('Habit ID is required');
+    if (!name) throw new Error('Tag name is required');
+    if (!type) throw new Error('Tag type is required');
+    
+    // Use model from context or directly
+    const Habit = models?.Habit || mongoose.model('Habit');
+    
+    // Find habit
+    const habit = await Habit.findById(habitId);
+    if (!habit) throw new Error(`Habit not found: ${habitId}`);
+    
+    // Add tag
+    habit.addTag(name, type, weight);
+    
+    // Log event
+    habit.logEvent('updated', userId, `Added tag: ${type}:${name}`);
+    
+    // Save changes
+    await habit.save();
+    logger?.debug(`Added tag ${type}:${name} to habit ${habitId}`);
+    
+    return habit;
+  } catch (error) {
+    logger?.error(`Error adding habit tag: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Remove a tag from a habit
+ * @param {Object} ctx - Application context
+ * @param {Object} params - Function parameters
+ * @param {string} params.habitId - The habit ID
+ * @param {string} params.name - Tag name
+ * @param {string} [params.type] - Tag type (optional)
+ * @param {string} [params.userId] - User ID making the change
+ * @returns {Promise<Object>} The updated habit
+ */
+export async function removeHabitTag(ctx, params) {
+  const { habitId, name, type, userId } = params;
+  const { models, logger } = ctx;
+  
+  try {
+    // Validate inputs
+    if (!habitId) throw new Error('Habit ID is required');
+    if (!name) throw new Error('Tag name is required');
+    
+    // Use model from context or directly
+    const Habit = models?.Habit || mongoose.model('Habit');
+    
+    // Find habit
+    const habit = await Habit.findById(habitId);
+    if (!habit) throw new Error(`Habit not found: ${habitId}`);
+    
+    // Remove tag
+    habit.removeTag(name, type);
+    
+    // Log event
+    habit.logEvent('updated', userId, `Removed tag: ${type ? type + ':' : ''}${name}`);
+    
+    // Save changes
+    await habit.save();
+    logger?.debug(`Removed tag ${name} from habit ${habitId}`);
+    
+    return habit;
+  } catch (error) {
+    logger?.error(`Error removing habit tag: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Get habits by tag
+ * @param {Object} ctx - Application context
+ * @param {Object} params - Function parameters
+ * @param {string} params.userId - The user ID
+ * @param {string} params.tagName - Tag name to search for
+ * @param {string} [params.tagType] - Optional tag type
+ * @returns {Promise<Array>} List of matching habits
+ */
+export async function getHabitsByTag(ctx, params) {
+  const { userId, tagName, tagType } = params;
+  const { models, logger } = ctx;
+  
+  try {
+    // Validate inputs
+    if (!userId) throw new Error('User ID is required');
+    if (!tagName) throw new Error('Tag name is required');
+    
+    // Use model from context or directly
+    const Habit = models?.Habit || mongoose.model('Habit');
+    
+    // Build query
+    const query = { userId };
+    
+    if (tagType) {
+      query.weightedTags = {
+        $elemMatch: {
+          name: tagName,
+          type: tagType
+        }
+      };
+    } else {
+      query['weightedTags.name'] = tagName;
+    }
+    
+    // Find habits with the tag
+    const habits = await Habit.find(query).sort({ 'metadata.priority': -1 });
+    
+    logger?.debug(`Found ${habits.length} habits with tag ${tagName} for user ${userId}`);
+    return habits;
+  } catch (error) {
+    logger?.error(`Error getting habits by tag: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Get activity timeline for a habit
+ * @param {Object} ctx - Application context
+ * @param {Object} params - Function parameters
+ * @param {string} params.habitId - The habit ID
+ * @param {number} [params.limit] - Maximum number of events to return
+ * @returns {Promise<Array>} Timeline events
+ */
+export async function getHabitTimeline(ctx, params) {
+  const { habitId, limit = 20 } = params;
+  const { models, logger } = ctx;
+  
+  try {
+    // Validate inputs
+    if (!habitId) throw new Error('Habit ID is required');
+    
+    // Use model from context or directly
+    const Habit = models?.Habit || mongoose.model('Habit');
+    
+    // Find habit
+    const habit = await Habit.findById(habitId);
+    if (!habit) throw new Error(`Habit not found: ${habitId}`);
+    
+    // Get timeline
+    const timeline = habit.getTimeline ? habit.getTimeline() : (habit.timeline || []);
+    
+    // Sort by timestamp (newest first) and limit
+    const sortedTimeline = [...timeline].sort((a, b) => 
+      new Date(b.timestamp) - new Date(a.timestamp)
+    ).slice(0, limit);
+    
+    return sortedTimeline;
+  } catch (error) {
+    logger?.error(`Error getting habit timeline: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Toggle active status of a habit
+ * @param {Object} ctx - Application context
+ * @param {Object} params - Function parameters
+ * @param {string} params.habitId - The habit ID
+ * @param {string} [params.userId] - User ID making the change
+ * @returns {Promise<Object>} The updated habit
+ */
+export async function toggleHabitActiveStatus(ctx, params) {
+  const { habitId, userId } = params;
+  const { models, logger } = ctx;
+  
+  try {
+    // Validate inputs
+    if (!habitId) throw new Error('Habit ID is required');
+    
+    // Use model from context or directly
+    const Habit = models?.Habit || mongoose.model('Habit');
+    
+    // Find habit
+    const habit = await Habit.findById(habitId);
+    if (!habit) throw new Error(`Habit not found: ${habitId}`);
+    
+    // Toggle active status
+    habit.status.active = !habit.status.active;
+    
+    // Log the appropriate event
+    if (habit.status.active) {
+      habit.logEvent('resumed', userId);
+    } else {
+      habit.logEvent('paused', userId);
+    }
+    
+    // Save changes
+    await habit.save();
+    logger?.debug(`Toggled active status for habit ${habitId} to ${habit.status.active}`);
+    
+    return habit;
+  } catch (error) {
+    logger?.error(`Error toggling habit active status: ${error.message}`);
+    throw error;
+  }
+}
+
 export default {
   createHabit,
   markHabitCompleted,
   getHabitStats,
-  getHabitsDueToday
+  getHabitsDueToday,
+  addHabitTag,
+  removeHabitTag,
+  getHabitsByTag,
+  getHabitTimeline,
+  toggleHabitActiveStatus
 }; 
