@@ -29,6 +29,7 @@ import journalEntryModule from './modules/journal-entry/index.js';
 import affirmationModule from './modules/affirmation/index.js'; // Added affirmation module
 import visionBoardModule from './modules/vision-board/index.js'; // Added vision board module
 import habitModule from './modules/habit/index.js'; // Added habit module
+import milestoneModule from './modules/milestone/index.js'; // Added milestone module
 // import profileModule from '@modules/profile/index.js'; // Placeholder for later
 
 // Load environment variables
@@ -71,7 +72,7 @@ async function startApolloOS() {
     }
 
     // 4. Load Modules
-    const modulesToLoad = ['user', 'user-profile', 'subscription', 'journal', 'journal-entry', 'affirmation', 'vision-board', 'habit'];
+    const modulesToLoad = ['user', 'user-profile', 'subscription', 'journal', 'journal-entry', 'affirmation', 'vision-board', 'habit', 'milestone'];
     // debug what modules are about to be loaded 
     console.log('[Main] Attempting to load modules:', modulesToLoad);
 
